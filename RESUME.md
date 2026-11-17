@@ -50,3 +50,14 @@ Il C6 DEV limita ora l'associazione temporanea a un controller, segnala timeout 
 ## Lavoro in corso: simulazione condivisa DEV
 
 `DevRadar` e `DevSphere` in `src/dev_radio.cpp` sono utilizzati dagli adapter S3/C6 e dal test `tests/dev_radio_test.cpp`; test host PASS con `-Wall -Wextra -Werror` per discovery, PING/PONG, command 0/ACK, heartbeat, perdita risposta, retry, MAC/ID/sessione/ACK errati, timeout, disconnessione C6, reboot e rollover. Il mock non verifica le API o la radio hardware. Le build di questa revisione sono in corso: `/tmp/dragon-dev-shared-s3.log` e `/tmp/dragon-dev-shared-c6.log`; non assumere completate senza esito. Il vecchio `RadioAckTracker` per traffico autenticato è ancora separato dalla macchina DEV: unificazione PENDING. Callback TX/coda TX, canale automatico, cifratura e test fisici PENDING. Non viene passato `authenticated=true` dalla modalità DEV. La diagnostica seriale di risposta applicativa e timeout è da ripristinare prima del test fisico.
+
+## Verifiche della simulazione condivisa (`70cec82`)
+
+- PASS: `g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/dev_radio_test.cpp src/dev_radio.cpp src/beacon_protocol.cpp -o /tmp/dragon-dev-radio-test && /tmp/dragon-dev-radio-test`. Simula discovery, ping, comando innocuo e heartbeat, ACK perso con retry, risposte errate o tardive, timeout, recupero, reboot, radio occupata e rollover. Il mock usa gli stessi metodi degli adapter, non il driver ESP-NOW.
+- PASS: test host `beacon_protocol_test` e `radio_link_test` con gli stessi flag.
+- PASS: S3 DEV, 1.774.995 byte app / 3.145.728, 71.228 byte globali, `build/dev-snapshot/s3.bin`, SHA-256 `e3f25370c585f12d1462b8c0c62a9cc356c8dc22bf42e4349745449ef88367ae`.
+- PASS: C6 DEV, 965.508 byte app / 1.310.720, 41.664 byte globali, `build/dev-snapshot/c6.bin`, SHA-256 `e21492b906401bd2420398cda6a540d586b178de0cb5c77026a18e66cbd48955`.
+- PASS: S3 default, 1.768.923 byte app / 3.145.728, 71.100 byte globali; `build/out/dragon_radar_sketch.ino.bin`, SHA-256 `8918f6ff6e8e8d903dea4b9c6a5cfb8721aa0ee682e9f44ca02fa5d804b5ecd3`.
+- PASS: C6 default, 961.976 byte app / 1.310.720, 41.616 byte globali; `build/beacon-1/dragon_ball_beacon.ino.bin`, SHA-256 `15e114efcf356fb1256a7fdd1dc72329890bccc710774d59ff9837749aaa4043`.
+- PASS: stringhe DEV presenti nei due binari DEV e assenti nei due default. Le build hanno riportato avvisi PowerShell sul profilo personale ma codice di uscita zero.
+- NOT RUN: collaudo radio fisico, callback TX/coda TX e pairing sicuro/LMK; non sono implementati. `RadioAckTracker` autenticato e retry DEV sono ancora separati, come indicato nella PR. La ricerca automatica del canale e la diagnostica seriale delle risposte restano da implementare. Una radio costantemente occupata può mantenere una richiesta DEV pendente indefinitamente: prevedere un limite prima del collaudo.
