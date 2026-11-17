@@ -12,9 +12,11 @@ Questo repository è una copia Git indipendente, senza la cronologia locale diag
 - DRB2 broadcast resta compatibile; i frame diretti usano flag DIRECTED e campi riutilizzati per destinazione/payload length. ID controller 0, sfere 1–7, broadcast 255.
 - S3 riceve beacon e registra MAC/RSSI; esempio XIAO invia beacon ogni ~500 ms con jitter ±30 ms.
 - Moduli host `PairingRegistry`, `ReplayWindow`, `RadioAckTracker` e test per pairing window, replay, ACK errato/corretto, retry/timeout e indirizzamento passano con `-Wall -Wextra -Werror`.
+- Correzioni review #2: `last_seen` si aggiorna solo via `markAuthenticatedRx`; il cambio sessione replay richiede `beginAuthenticatedSession(..., authenticated_handshake=true)`; ACK tracker richiede MAC, sessione, peer/destinatario, tipo e sequenza. Nuovi casi negativi testati.
 - Le macchine host non sono ancora integrate nel trasporto. Pairing/autenticazione, NVS, LMK e cifratura unicast, ACK/retry effettivi e heartbeat end-to-end restano incompleti. Non dichiarare la milestone completata.
 - Build finale S3 riuscita: app 1.768.887 / 3.145.728 byte, globali 71.100 byte; SHA-256 `adb44d5b538925452c02c6098d734664305fd81581deef6247a07637205795af`.
 - Build finale C6 riuscita: app 961.976 / 1.310.720 byte, globali 41.616 byte; SHA-256 `87128d6d3552aec60eb0df659023d735a0195a5cd144079d227c084130b1b965`.
+- Build dopo le correzioni review: S3 riuscita, 1.768.887 byte app / 71.100 globali; binario invariato SHA-256 `adb44d5b538925452c02c6098d734664305fd81581deef6247a07637205795af`. C6 riuscita, 961.976 byte app / 41.616 globali; SHA-256 `5b18b1bcb8d0ffa1178c4e72ef28a2c48715543cc79602e44c21d67156c66ba7`.
 - Test host `beacon_protocol_test`, `radio_link_test`, `beacon_registry_test`: passati con `-Wall -Wextra -Werror`.
 - La Milestone 1 NON è completata: le state machine host non sono collegate al trasporto, manca TX/RX applicativo bidirezionale, pairing fisico, persistenza NVS, provisioning protetto LMK, cifratura ESP-NOW, heartbeat/ACK end-to-end e recovery canale AP. Nessun test radio fisico o flash è stato eseguito.
 
