@@ -7,6 +7,8 @@ Questo repository è una copia Git indipendente, senza la cronologia locale diag
 
 ## Stato software
 
+- Follow-up review #2: una voce associata senza sessione autenticata è `AwaitingAuthenticatedSession`, non `Paired`/`Lost`; testati timestamp `millis()==0`, ricezione non autenticata, scadenza e refresh autenticato.
+
 - Build S3 dalla directory pulita: riuscita con Arduino ESP32 Core 3.3.12; 1.768.859 byte app su 3.145.728, 71.100 byte globali.
 - Build C6 dalla directory pulita: riuscita con Arduino ESP32 Core 3.x; 961.914 byte app su 1.310.720, 41.616 byte globali.
 - DRB2 broadcast resta compatibile; i frame diretti usano flag DIRECTED e campi riutilizzati per destinazione/payload length. ID controller 0, sfere 1–7, broadcast 255.

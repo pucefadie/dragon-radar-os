@@ -1,8 +1,8 @@
 #pragma once
 #include <stdint.h>
 #include "beacon_protocol.h"
-enum class LinkState:uint8_t { Unpaired, PairWindow, Paired, Lost };
-struct PairedPeer { bool valid=false;uint8_t mac[6]{};uint8_t lmk[16]{};uint32_t last_seen=0,session=0;bool session_valid=false; };
+enum class LinkState:uint8_t { Unpaired, PairWindow, AwaitingAuthenticatedSession, Paired, Lost };
+struct PairedPeer { bool valid=false;uint8_t mac[6]{};uint8_t lmk[16]{};uint32_t last_seen=0,session=0;bool session_valid=false,authenticated_rx_seen=false; };
 class PairingRegistry {
  public:
   void open(uint32_t now,uint32_t duration_ms);
