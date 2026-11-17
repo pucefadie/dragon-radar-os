@@ -26,6 +26,7 @@ Le build scrivono gli artefatti sotto `build/`, esclusi da Git. Il canale `4` è
 ## Test host
 
 ```bash
+g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/dev_radio_test.cpp src/dev_radio.cpp src/beacon_protocol.cpp -o /tmp/dev_radio_test && /tmp/dev_radio_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/beacon_protocol_test.cpp src/beacon_protocol.cpp -o /tmp/protocol_test && /tmp/protocol_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/beacon_registry_test.cpp src/beacon_registry.cpp src/beacon_protocol.cpp -o /tmp/registry_test && /tmp/registry_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/radio_link_test.cpp src/radio_link.cpp src/beacon_protocol.cpp -o /tmp/radio_link_test && /tmp/radio_link_test

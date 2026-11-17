@@ -1,6 +1,7 @@
 #include "beacon_service.h"
 #include "beacon_protocol.h"
 #include "beacon_registry.h"
+#include "dev_radio.h"
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <esp_system.h>
@@ -15,22 +16,11 @@ namespace {
 struct Packet { uint8_t mac[6]; uint8_t bytes[BEACON_FRAME_SIZE]; int8_t rssi; };
 BeaconRegistry registry; QueueHandle_t queue=nullptr; bool ready=false;
 #if RADIO_DEV_INSECURE
-uint32_t devSession=0, devSeq=0, devNext=0, devBoot=0, devPendingSeq=0, devSent=0, devLastRx=0; uint8_t devMac[6]{}; bool devPending=false, devLinked=false; RadioMessage devExpected=RadioMessage::Pong; uint8_t devBytes[RADIO_FRAME_SIZE]{}, devAttempts=0;
-void devSend(const uint8_t *mac, uint8_t id, RadioMessage type) {
-  if (devPending) return;
-  if (!esp_now_is_peer_exist(mac)) { esp_now_peer_info_t peer={}; memcpy(peer.peer_addr,mac,6); peer.ifidx=WIFI_IF_STA; if (esp_now_add_peer(&peer)!=ESP_OK) return; }
-  RadioFrame f{}; f.type=type; f.id=0; f.destination=id; f.flags=RADIO_FLAG_DIRECTED; f.session=devSession; f.sequence=++devSeq;
-  if(type==RadioMessage::Command) { f.payload_length=1; f.payload[0]=0; f.flags|=RADIO_FLAG_ACK_REQUIRED; }
-  radioEncode(f,devBytes); memcpy(devMac,mac,6); devPendingSeq=f.sequence; devExpected=type==RadioMessage::Command?RadioMessage::CommandAck:type==RadioMessage::Ping?RadioMessage::Pong:RadioMessage::Status; devPending=true; devAttempts=0; devSent=millis()-500;
-}
-void devTick() {
-  uint32_t now=millis();
-  if(devPending && uint32_t(now-devSent)>=500) {
-    if(devAttempts>=3) { Serial.println("[DEV INSECURE] response timeout"); devPending=false; devLinked=false; devNext=now+2000; }
-    else { esp_err_t err=esp_now_send(devMac,devBytes,sizeof(devBytes)); devSent=now; ++devAttempts; Serial.printf("[DEV INSECURE] enqueue seq=%lu attempt=%u result=%d channel=%u\n",(unsigned long)devPendingSeq,devAttempts,int(err),beaconServiceChannel()); }
-  }
-  if(devLinked && uint32_t(now-devLastRx)>10000) { devLinked=false; Serial.println("[DEV INSECURE] LINK LOST"); }
-}
+class DevAdapter : public DevRadioTransport { public: bool send(const uint8_t *mac,const uint8_t *data) override {
+ if(!esp_now_is_peer_exist(mac)){esp_now_peer_info_t peer={};memcpy(peer.peer_addr,mac,6);peer.ifidx=WIFI_IF_STA;if(esp_now_add_peer(&peer)!=ESP_OK)return false;}
+ esp_err_t e=esp_now_send(mac,data,RADIO_FRAME_SIZE);Serial.printf("[DEV INSECURE] local enqueue=%d channel=%u\n",int(e),beaconServiceChannel());return e==ESP_OK;
+}};
+DevAdapter devAdapter; DevRadar *devRadar=nullptr;
 #endif
 std::atomic<uint32_t> dropped{0}; uint32_t malformed=0, conflicts=0, duplicates=0;
 void receive(const esp_now_recv_info_t *info, const uint8_t *data, int length) {
@@ -48,7 +38,7 @@ void beaconServiceInit() {
   if (esp_now_register_recv_cb(receive)!=ESP_OK) { esp_now_deinit(); return; }
   ready=true;
 #if RADIO_DEV_INSECURE
-  devSession=esp_random(); if (!devSession) devSession=1; Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
+  static DevRadar radar(devAdapter,esp_random()|1); devRadar=&radar; Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
 #endif
 }
 void beaconServiceUpdate() {
@@ -59,29 +49,19 @@ void beaconServiceUpdate() {
   while (budget-- && xQueueReceive(queue,&p,0)==pdTRUE) {
     RadioFrame rf{}; if (!radioDecode(p.bytes,sizeof(p.bytes),rf)) { ++malformed; continue; }
 #if RADIO_DEV_INSECURE
-    if (rf.type!=RadioMessage::Beacon) {
-      if(devPending && rf.type==devExpected && rf.id==1 && rf.destination==0 && (rf.flags&RADIO_FLAG_DIRECTED) && rf.session==devBoot && rf.ack_sequence==devPendingSeq && !memcmp(p.mac,devMac,6) && uint32_t(millis()-devSent)<1500) {
-        Serial.printf("[DEV INSECURE] response=%u RTT=%lu ms\n",unsigned(rf.type),(unsigned long)(millis()-devSent)); devPending=false; devLinked=true; devLastRx=millis();
-        if(rf.type==RadioMessage::Status && rf.payload_length==1 && rf.payload[0]==1) devSend(p.mac,1,RadioMessage::Ping);
-        else if(rf.type==RadioMessage::Pong) devSend(p.mac,1,RadioMessage::Command);
-      } else Serial.println("[DEV INSECURE] unexpected response discarded");
-      continue;
-    }
+    if (rf.type!=RadioMessage::Beacon) { devRadar->receive(p.mac,p.bytes,sizeof(p.bytes),millis()); continue; }
 #endif
     BeaconFrame frame; if (!beaconDecode(p.bytes,sizeof(p.bytes),frame)) { ++malformed; continue; }
     BeaconAccept accepted=registry.accept(frame,p.mac,p.rssi,millis());
     #if RADIO_DEV_INSECURE
-    if (accepted==BeaconAccept::Accepted && frame.id==1) {
-      if(devBoot!=frame.boot_id) { devBoot=frame.boot_id; devPending=false; devLinked=false; devNext=0; }
-      if(!devPending && int32_t(millis()-devNext)>=0) { devNext=millis()+3000; devSend(p.mac,1,devLinked?RadioMessage::Heartbeat:RadioMessage::Discovery); }
-    }
+    if (accepted==BeaconAccept::Accepted) devRadar->beacon(p.mac,frame.id,frame.boot_id,millis());
 #endif
     if (accepted==BeaconAccept::Conflict) ++conflicts;
     else if (accepted==BeaconAccept::Duplicate) ++duplicates;
     else if (accepted==BeaconAccept::Invalid) ++malformed;
   }
 #if RADIO_DEV_INSECURE
-  devTick();
+  devRadar->tick(millis());
 #endif
 }
 uint8_t beaconServiceChannel() {
