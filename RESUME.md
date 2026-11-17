@@ -34,3 +34,11 @@ Per la radio, verificare che entrambe le schede usino lo stesso canale e che l'a
 ## Lavoro in corso: trasporto ESP-NOW di sviluppo
 
 È stato collegato un primo percorso sperimentale PING/PONG ai servizi ESP-NOW S3/C6, disabilitato per default. Per abilitarlo in build usare `RADIO_DEV_INSECURE=1` davanti a entrambi gli script. È traffico in chiaro, non autenticato, senza attuatori: non è pairing sicuro. Le build con tale opzione sono state avviate; consultare `/tmp/dragon-s3-dev-build.log` e `/tmp/dragon-c6-dev-build.log` per gli esiti. Nessuna prova radio è stata eseguita. Questo percorso è incompleto: restano discovery, heartbeat, ACK/retry, timeout, recovery canale e test di trasporto. Non considerarlo pronto per il collaudo completo.
+
+## Checkpoint trasporto DEV successivo
+
+`RADIO_DEV_INSECURE=1` abilita trasporto sperimentale NON autenticato: dal beacon ID 1 il radar invia discovery, PING, COMMAND diagnostico codice 0 e heartbeat; il C6 risponde STATUS, PONG e COMMAND_ACK. Il radar correla MAC, ID, sessione del beacon, destinatario e numero richiesta, con tre tentativi ogni 500 ms e timeout. `esp_now_send` segnala solo accodamento, non consegna. Il comando 0 non aziona periferiche; il C6 scarta altri comandi. Le callback RX copiano nella coda e il loop elabora i frame.
+
+Build DEV riuscite: S3 1.774.779 byte / 3.145.728, globali 71.180, `build/out/dragon_radar_sketch.ino.bin`, SHA-256 `ee91de5a68a4a9935862ddd33064b6772e94f4cbb103b62614aab302b2b5e2da`; C6 963.810 byte / 1.310.720, globali 41.624, `build/beacon-1/dragon_ball_beacon.ino.bin`, SHA-256 `9e9be3ab75667daae72b0f50ca7012bbf89d48ef09100fc7c6231fbb74876fab`. Esistenti test host codec, registry e radio_link passati. Nessun flash o collaudo fisico eseguito.
+
+PENDING: test mock end-to-end e verifiche duplicati/ripartenza/ACK perso, callback TX e code TX, stato timeout C6, rilevazione e recovery canale, provisioning e pairing sicuro, cifratura LMK. Canale C6 attualmente fissato in build; verificare canale effettivo S3 col comando seriale `beacons` e allineare il parametro build C6. Non cambiare il canale del radar associato a un AP. La PR resta draft.

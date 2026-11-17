@@ -64,10 +64,11 @@ void loop() {
   DevPacket packet; unsigned budget=8;
   while (budget-- && xQueueReceive(devQueue,&packet,0)==pdTRUE) {
     RadioFrame incoming{};
-    if (!radioDecode(packet.bytes,sizeof(packet.bytes),incoming) || incoming.type!=RadioMessage::Ping || incoming.id!=0 || incoming.destination!=DRAGON_BALL_ID || !(incoming.flags&RADIO_FLAG_DIRECTED)) continue;
+    if (!radioDecode(packet.bytes,sizeof(packet.bytes),incoming) || incoming.id!=0 || incoming.destination!=DRAGON_BALL_ID || !(incoming.flags&RADIO_FLAG_DIRECTED)) continue;
+    if (incoming.type!=RadioMessage::Discovery && incoming.type!=RadioMessage::Ping && incoming.type!=RadioMessage::Heartbeat && !(incoming.type==RadioMessage::Command && incoming.payload_length==1 && incoming.payload[0]==0)) continue;
     if (!esp_now_is_peer_exist(packet.mac)) { esp_now_peer_info_t peer={}; memcpy(peer.peer_addr,packet.mac,6); peer.ifidx=WIFI_IF_STA; if (esp_now_add_peer(&peer)!=ESP_OK) continue; }
-    RadioFrame reply{}; reply.type=RadioMessage::Pong; reply.id=DRAGON_BALL_ID; reply.destination=0; reply.flags=RADIO_FLAG_DIRECTED; reply.session=bootId; reply.sequence=++sequence; reply.ack_sequence=incoming.sequence; uint8_t bytes[RADIO_FRAME_SIZE]; radioEncode(reply,bytes);
-    esp_err_t result=esp_now_send(packet.mac,bytes,sizeof(bytes)); Serial.printf("[DEV INSECURE] PING -> PONG err=%d\n",int(result));
+    RadioFrame reply{}; reply.type=incoming.type==RadioMessage::Ping?RadioMessage::Pong:incoming.type==RadioMessage::Command?RadioMessage::CommandAck:RadioMessage::Status; reply.id=DRAGON_BALL_ID; reply.destination=0; reply.flags=RADIO_FLAG_DIRECTED; reply.session=bootId; reply.sequence=++sequence; reply.ack_sequence=incoming.sequence; if(incoming.type==RadioMessage::Discovery) { reply.payload_length=1; reply.payload[0]=1; } uint8_t bytes[RADIO_FRAME_SIZE]; radioEncode(reply,bytes);
+    esp_err_t result=esp_now_send(packet.mac,bytes,sizeof(bytes)); Serial.printf("[DEV INSECURE] RX=%u reply=%u enqueued=%d channel=%d\n",unsigned(incoming.type),unsigned(reply.type),int(result),DRAGON_RADIO_CHANNEL);
   }
 #endif
   if (int32_t(millis()-nextBeacon)>=0) {
