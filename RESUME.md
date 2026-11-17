@@ -1,6 +1,7 @@
 # Stato snapshot pulito Dragon Radar OS v0.3
 
 Branch di lavoro: `feat/espnow-m1-bidirectional`, partito da `main` aggiornato (`b0483cd`).
+Checkpoint pubblicato: `5ce4d48271594618733ecc74499696acc09241dd`; PR draft #2 aperta verso `main`: https://github.com/pucefadie/dragon-radar-os/pull/2. Non fare merge: la Milestone 1 è dichiarata incompleta nella PR.
 
 Questo repository è una copia Git indipendente, senza la cronologia locale diagnostica. La cronologia completa e i backup restano nella directory privata locale originale.
 
