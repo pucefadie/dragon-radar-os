@@ -1,0 +1,7 @@
+#include "radio_link.h"
+#include <cassert>
+int main(){uint8_t mac[6]={1,2,3},key[16]={4},f[RADIO_FRAME_SIZE]={};PairingRegistry p;assert(p.state(1,0)==LinkState::Unpaired);p.open(100,500);assert(!p.pair(1,mac,key,99));assert(p.pair(1,mac,key,101));assert(p.trusted(1,mac,102));uint8_t other[6]={9};assert(!p.pair(1,other,key,103));assert(p.state(1,16000)==LinkState::Lost);assert(p.remove(1));assert(!p.peer(1)->valid);
+ RadioAckTracker a;assert(a.begin(1,7,f,sizeof(f),100));uint8_t out[RADIO_FRAME_SIZE],n=0;assert(a.due(100,out,n)&&n==sizeof(f));assert(!a.due(549,out,n));assert(a.due(550,out,n));assert(!a.acknowledge(2,7));assert(a.acknowledge(1,7));assert(!a.pending());assert(a.begin(1,8,f,sizeof(f),1000,10,2));assert(a.due(1000,out,n));assert(a.due(1010,out,n));assert(!a.due(1020,out,n)&&a.failed());
+ ReplayWindow r;assert(r.accept(5,1));assert(!r.accept(5,1));assert(r.accept(5,2));assert(!r.accept(6,3));r.reset();assert(r.accept(6,3));assert(!r.accept(6,0));
+ RadioFrame tx{};tx.type=RadioMessage::Command;tx.id=0;tx.destination=1;tx.flags=RADIO_FLAG_DIRECTED|RADIO_FLAG_ACK_REQUIRED;tx.payload_length=1;tx.payload[0]=3;radioEncode(tx,out);RadioFrame rx{};assert(radioDecode(out,sizeof(out),rx));assert(rx.id==0&&rx.destination==1&&(rx.flags&RADIO_FLAG_ACK_REQUIRED));
+}

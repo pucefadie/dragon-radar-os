@@ -2,7 +2,7 @@
 
 Questo repository GitHub è uno **snapshot pulito della v0.3**. La cronologia diagnostica completa, i log di collaudo e i backup del dispositivo restano conservati soltanto nel repository locale originale.
 
-Il progetto mantiene la base Arduino collaudata per Waveshare ESP32-S3-Touch-AMOLED-1.75-G e include un esempio firmware per Seeed XIAO ESP32-C6. Lo stato radio è sperimentale: il branch contiene framing con CRC e un ricevitore beacon, ma pairing autenticato, ACK/ritrasmissioni integrate, attuatori della sfera e prova radio S3↔C6 devono ancora essere completati/validati. Non interpretare RSSI come distanza o direzione.
+Il progetto mantiene la base Arduino collaudata per Waveshare ESP32-S3-Touch-AMOLED-1.75-G e include un esempio firmware per Seeed XIAO ESP32-C6. DRB2 ora indirizza frame tra controller ID 0 e sfere 1–7. Moduli host verificano policy pairing, replay e ACK/retry; non sono ancora integrati nel trasporto. Pairing persistente/autenticato e cifratura unicast restano incompleti; nessun test radio S3↔C6 è stato eseguito. Non interpretare RSSI come distanza o direzione.
 
 ## Hardware e pin
 
@@ -35,4 +35,4 @@ g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/proximity_engine_test.cpp s
 
 Non sono inclusi log diagnostici, dump/backup flash, credenziali, identificatori hardware individuali o impostazioni di porta seriale personali. Non inserire chiavi Wi-Fi, password, token o LMK nei sorgenti. Consultare [PROTOCOL_AND_POWER.md](PROTOCOL_AND_POWER.md) e [RESUME.md](RESUME.md) prima di ogni prova radio. Nessun firmware viene flashato automaticamente dai comandi di build.
 
-Build eseguite dalla copia pulita: S3 1.768.859 byte applicazione (su 3.145.728), 71.100 byte globali; C6 961.914 byte (su 1.310.720), 41.616 byte globali. Entrambe compilate con le toolchain locali; i test radio restano da fare sul banco.
+Build v0.3 eseguite dalla copia pulita: S3 1.768.887 byte applicazione (su 3.145.728), 71.100 byte globali; C6 961.976 byte (su 1.310.720), 41.616 byte globali. Il branch radio aggiunge solo moduli host-testati e jitter al beacon; la comunicazione bidirezionale non è ancora collaudabile.

@@ -16,5 +16,8 @@ int main() {
   data[24]^=1;assert(!radioDecode(data,sizeof(data),decoded));data[24]^=1;
   data[4]=9;assert(!radioDecode(data,sizeof(data),decoded));
   typed.type=RadioMessage::Discovery;typed.id=1;typed.payload_length=0;radioEncode(typed,data);assert(radioDecode(data,sizeof(data),decoded));
+  typed.type=RadioMessage::Command;typed.id=0;typed.destination=7;typed.flags=RADIO_FLAG_DIRECTED|RADIO_FLAG_ACK_REQUIRED;typed.payload_length=1;typed.payload[0]=2;radioEncode(typed,data);assert(radioDecode(data,sizeof(data),decoded)&&decoded.id==0&&decoded.destination==7&&(decoded.flags&RADIO_FLAG_ACK_REQUIRED));
+  typed.destination=255;radioEncode(typed,data);assert(!radioDecode(data,sizeof(data),decoded));
+  typed.destination=1;typed.id=8;radioEncode(typed,data);assert(!radioDecode(data,sizeof(data),decoded));
   for(unsigned i=0;i<256;++i){data[32]=uint8_t(i);data[33]=uint8_t(i>>8);if(radioDecode(data,sizeof(data),decoded))assert(i==radioCrc16(data,32));}
 }

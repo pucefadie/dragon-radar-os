@@ -21,7 +21,7 @@
 #endif
 static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
-static uint32_t bootId=0, sequence=0, last=0;
+static uint32_t bootId=0, sequence=0, nextBeacon=0;
 void setup() {
   Serial.begin(115200);
 #if defined(ARDUINO_XIAO_ESP32C6)
@@ -45,8 +45,9 @@ void setup() {
 }
 void loop() {
   if (!ready) { delay(100); return; }
-  if ((uint32_t)(millis()-last)>=1000) {
-    last=millis(); BeaconFrame frame={DRAGON_BALL_ID,false,bootId,sequence++,0};
+  if (int32_t(millis()-nextBeacon)>=0) {
+    nextBeacon=millis()+470+(esp_random()%61); // ~500 ms, +/-30 ms jitter
+    BeaconFrame frame={DRAGON_BALL_ID,false,bootId,sequence++,0};
     uint8_t bytes[BEACON_FRAME_SIZE]; beaconEncode(frame,bytes);
     esp_err_t result=esp_now_send(broadcastMac,bytes,sizeof(bytes));
     if (result!=ESP_OK) Serial.printf("send error: %d\n",(int)result);
