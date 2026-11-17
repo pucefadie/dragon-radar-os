@@ -37,3 +37,5 @@ g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/proximity_engine_test.cpp s
 Non sono inclusi log diagnostici, dump/backup flash, credenziali, identificatori hardware individuali o impostazioni di porta seriale personali. Non inserire chiavi Wi-Fi, password, token o LMK nei sorgenti. Consultare [PROTOCOL_AND_POWER.md](PROTOCOL_AND_POWER.md) e [RESUME.md](RESUME.md) prima di ogni prova radio. Nessun firmware viene flashato automaticamente dai comandi di build.
 
 Build v0.3 eseguite dalla copia pulita: S3 1.768.887 byte applicazione (su 3.145.728), 71.100 byte globali; C6 961.976 byte (su 1.310.720), 41.616 byte globali. Il branch radio aggiunge solo moduli host-testati e jitter al beacon; la comunicazione bidirezionale non è ancora collaudabile.
+
+Preparazione del primo collaudo e limiti correnti: [FIRST_RADIO_TEST.md](FIRST_RADIO_TEST.md).

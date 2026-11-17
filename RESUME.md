@@ -42,3 +42,7 @@ Per la radio, verificare che entrambe le schede usino lo stesso canale e che l'a
 Build DEV riuscite: S3 1.774.779 byte / 3.145.728, globali 71.180, `build/out/dragon_radar_sketch.ino.bin`, SHA-256 `ee91de5a68a4a9935862ddd33064b6772e94f4cbb103b62614aab302b2b5e2da`; C6 963.810 byte / 1.310.720, globali 41.624, `build/beacon-1/dragon_ball_beacon.ino.bin`, SHA-256 `9e9be3ab75667daae72b0f50ca7012bbf89d48ef09100fc7c6231fbb74876fab`. Esistenti test host codec, registry e radio_link passati. Nessun flash o collaudo fisico eseguito.
 
 PENDING: test mock end-to-end e verifiche duplicati/ripartenza/ACK perso, callback TX e code TX, stato timeout C6, rilevazione e recovery canale, provisioning e pairing sicuro, cifratura LMK. Canale C6 attualmente fissato in build; verificare canale effettivo S3 col comando seriale `beacons` e allineare il parametro build C6. Non cambiare il canale del radar associato a un AP. La PR resta draft.
+
+## Checkpoint revisione b361ab0
+
+Il C6 DEV limita ora l'associazione temporanea a un controller, segnala timeout dopo 10 s e richiede una nuova discovery dallo stesso MAC; un altro controller richiede il riavvio del C6. Build C6 DEV riuscita: 964.122 byte app, 41.640 byte globali, SHA-256 `319e3f2f627fd57a60a1090671afb242208434e7ef6e4b16269cd7abdea064a5`. Vedere FIRST_RADIO_TEST.md. Questo non completa la fase: mancano test mock dei firmware, unificazione ACK/retry, callback e code TX, recovery automatico del canale, build predefinite aggiornate e prova fisica. Nessun flash eseguito.

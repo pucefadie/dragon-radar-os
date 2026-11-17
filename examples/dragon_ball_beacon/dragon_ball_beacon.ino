@@ -15,6 +15,9 @@
 #if RADIO_DEV_INSECURE
 struct DevPacket { uint8_t mac[6], bytes[RADIO_FRAME_SIZE]; };
 static QueueHandle_t devQueue;
+static uint8_t controllerMac[6]{};
+static bool controllerKnown=false, controllerOnline=false;
+static uint32_t controllerLastRx=0;
 static void devReceive(const esp_now_recv_info_t *info,const uint8_t *data,int len) { if (!devQueue || !info || !info->src_addr || !data || len!=RADIO_FRAME_SIZE) return; DevPacket p; memcpy(p.mac,info->src_addr,6); memcpy(p.bytes,data,RADIO_FRAME_SIZE); xQueueSend(devQueue,&p,0); }
 #endif
 #ifndef DRAGON_BALL_ID
@@ -61,12 +64,22 @@ void setup() {
 void loop() {
   if (!ready) { delay(100); return; }
   #if RADIO_DEV_INSECURE
+  if (controllerOnline && uint32_t(millis()-controllerLastRx)>=10000) { controllerOnline=false; Serial.println("[DEV INSECURE] controller timeout; discovery required"); }
   DevPacket packet; unsigned budget=8;
   while (budget-- && xQueueReceive(devQueue,&packet,0)==pdTRUE) {
     RadioFrame incoming{};
     if (!radioDecode(packet.bytes,sizeof(packet.bytes),incoming) || incoming.id!=0 || incoming.destination!=DRAGON_BALL_ID || !(incoming.flags&RADIO_FLAG_DIRECTED)) continue;
     if (incoming.type!=RadioMessage::Discovery && incoming.type!=RadioMessage::Ping && incoming.type!=RadioMessage::Heartbeat && !(incoming.type==RadioMessage::Command && incoming.payload_length==1 && incoming.payload[0]==0)) continue;
-    if (!esp_now_is_peer_exist(packet.mac)) { esp_now_peer_info_t peer={}; memcpy(peer.peer_addr,packet.mac,6); peer.ifidx=WIFI_IF_STA; if (esp_now_add_peer(&peer)!=ESP_OK) continue; }
+    if (!controllerKnown) {
+      if (incoming.type!=RadioMessage::Discovery) continue;
+      esp_now_peer_info_t peer={}; memcpy(peer.peer_addr,packet.mac,6); peer.ifidx=WIFI_IF_STA;
+      if (!esp_now_is_peer_exist(packet.mac) && esp_now_add_peer(&peer)!=ESP_OK) continue;
+      memcpy(controllerMac,packet.mac,6); controllerKnown=true;
+    }
+    if (memcmp(controllerMac,packet.mac,6)) continue;
+    if (!controllerOnline && incoming.type!=RadioMessage::Discovery) continue;
+    controllerLastRx=millis();
+    if (!controllerOnline) { controllerOnline=true; Serial.println("[DEV INSECURE] controller online"); }
     RadioFrame reply{}; reply.type=incoming.type==RadioMessage::Ping?RadioMessage::Pong:incoming.type==RadioMessage::Command?RadioMessage::CommandAck:RadioMessage::Status; reply.id=DRAGON_BALL_ID; reply.destination=0; reply.flags=RADIO_FLAG_DIRECTED; reply.session=bootId; reply.sequence=++sequence; reply.ack_sequence=incoming.sequence; if(incoming.type==RadioMessage::Discovery) { reply.payload_length=1; reply.payload[0]=1; } uint8_t bytes[RADIO_FRAME_SIZE]; radioEncode(reply,bytes);
     esp_err_t result=esp_now_send(packet.mac,bytes,sizeof(bytes)); Serial.printf("[DEV INSECURE] RX=%u reply=%u enqueued=%d channel=%d\n",unsigned(incoming.type),unsigned(reply.type),int(result),DRAGON_RADIO_CHANNEL);
   }
