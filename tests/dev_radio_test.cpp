@@ -4,7 +4,7 @@
 #include <deque>
 struct Msg { bool toSphere; uint8_t bytes[RADIO_FRAME_SIZE]; };
 struct Bus;
-struct Adapter : DevRadioTransport { Bus &bus; bool sphere; Adapter(Bus &b,bool s):bus(b),sphere(s){} bool send(const uint8_t*,const uint8_t*) override; };
+struct Adapter : DevRadioTransport { Bus &bus; bool sphere; bool busyTimeout=false; Adapter(Bus &b,bool s):bus(b),sphere(s){} bool send(const uint8_t*,const uint8_t*) override; void event(DevEvent e,uint8_t,uint32_t,uint32_t) override {if(e==DevEvent::TxBusyTimeout)busyTimeout=true;} };
 struct Bus {std::deque<Msg> q; bool busy=false;};
 bool Adapter::send(const uint8_t*,const uint8_t *p){if(bus.busy)return false;Msg m{};m.toSphere=!sphere;memcpy(m.bytes,p,RADIO_FRAME_SIZE);bus.q.push_back(m);return true;}
 int main(){
@@ -31,5 +31,6 @@ int main(){
  Bus ackbus;Adapter aa(ackbus,false),ab(ackbus,true);DevRadar ar(aa,5);DevSphere as(ab,1,10);ar.beacon(smac,1,10,0);ar.tick(0);bool dropped=false;unsigned steps=30;while(!ackbus.q.empty()&&steps--){Msg m=ackbus.q.front();ackbus.q.pop_front();RadioFrame f{};assert(radioDecode(m.bytes,sizeof(m.bytes),f));if(!m.toSphere&&f.type==RadioMessage::CommandAck&&!dropped){dropped=true;continue;}if(m.toSphere)as.receive(rmac,m.bytes,sizeof(m.bytes),0);else ar.receive(smac,m.bytes,sizeof(m.bytes),0);ar.tick(0);}assert(dropped&&ar.pending());ar.tick(500);while(!ackbus.q.empty()&&steps--){Msg m=ackbus.q.front();ackbus.q.pop_front();if(m.toSphere)as.receive(rmac,m.bytes,sizeof(m.bytes),500);else ar.receive(smac,m.bytes,sizeof(m.bytes),500);ar.tick(500);}assert(steps&&!ar.pending()&&ar.linked());
  // A delayed response beyond the application window must not clear a pending request.
  Bus delayed;Adapter da(delayed,false),db(delayed,true);DevRadar dr(da,4);DevSphere ds(db,1,9);dr.beacon(smac,1,9,0);dr.tick(0);Msg rq=delayed.q.front();delayed.q.pop_front();ds.receive(rmac,rq.bytes,sizeof(rq.bytes),0);Msg late=delayed.q.front();delayed.q.clear();dr.receive(smac,late.bytes,sizeof(late.bytes),1500);assert(dr.pending()&&!dr.linked());
+ Bus stuck;Adapter stuckRadar(stuck,false),stuckSphere(stuck,true);DevRadar sr(stuckRadar,1);DevSphere ss(stuckSphere,1,2);uint32_t clock=0xfffffff0u;stuck.busy=true;sr.beacon(smac,1,2,clock);for(int i=0;i<42;i++){sr.tick(clock);clock+=100;}assert(!sr.pending()&&!sr.linked()&&stuckRadar.busyTimeout&&sr.outcome()==DevOutcome::TxBusyTimeout);stuck.busy=false;clock+=2000;sr.beacon(smac,1,2,clock);sr.tick(clock);assert(!stuck.q.empty());unsigned budget=20;while(!stuck.q.empty()&&budget--){Msg m=stuck.q.front();stuck.q.pop_front();if(m.toSphere)ss.receive(rmac,m.bytes,sizeof(m.bytes),clock);else sr.receive(smac,m.bytes,sizeof(m.bytes),clock);sr.tick(clock);}assert(budget&&sr.linked());
  uint8_t malformed[RADIO_FRAME_SIZE]={};rebooted.receive(rmac,malformed,sizeof(malformed),now);assert(rebooted.online());
 }

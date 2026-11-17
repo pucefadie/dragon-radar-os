@@ -2,6 +2,9 @@
 #include "beacon_protocol.h"
 #include "beacon_registry.h"
 #include "dev_radio.h"
+#if RADIO_DEV_INSECURE
+#include "dev_radio_tx.h"
+#endif
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <esp_system.h>
@@ -16,10 +19,12 @@ namespace {
 struct Packet { uint8_t mac[6]; uint8_t bytes[BEACON_FRAME_SIZE]; int8_t rssi; };
 BeaconRegistry registry; QueueHandle_t queue=nullptr; bool ready=false;
 #if RADIO_DEV_INSECURE
+DevRadioTx radioTx;
+void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { radioTx.completed(status); }
 class DevAdapter : public DevRadioTransport { public: bool send(const uint8_t *mac,const uint8_t *data) override {
- if(!esp_now_is_peer_exist(mac)){esp_now_peer_info_t peer={};memcpy(peer.peer_addr,mac,6);peer.ifidx=WIFI_IF_STA;if(esp_now_add_peer(&peer)!=ESP_OK)return false;}
- esp_err_t e=esp_now_send(mac,data,RADIO_FRAME_SIZE);Serial.printf("[DEV INSECURE] local enqueue=%d channel=%u\n",int(e),beaconServiceChannel());return e==ESP_OK;
-}};
+ bool ok=radioTx.enqueue(mac,data); RadioFrame f{};radioDecode(data,RADIO_FRAME_SIZE,f); Serial.printf("[DEV INSECURE] queued=%d type=%s id=%u seq=%lu channel=%u\n",ok,devMessageName(f.type),f.destination,(unsigned long)f.sequence,beaconServiceChannel());return ok;
+ } void event(DevEvent e,uint8_t id,uint32_t seq,uint32_t value) override {const char *names[]={"TX_BUSY_TIMEOUT","TIMEOUT","LINK_LOST","LINK_RECOVERED","RESPONSE"};Serial.printf("[DEV INSECURE] %s id=%u seq=%lu RTT=%lu ms channel=%u\n",names[unsigned(e)],id,(unsigned long)seq,(unsigned long)value,beaconServiceChannel());}
+};
 DevAdapter devAdapter; DevRadar *devRadar=nullptr;
 #endif
 std::atomic<uint32_t> dropped{0}; uint32_t malformed=0, conflicts=0, duplicates=0;
@@ -38,6 +43,7 @@ void beaconServiceInit() {
   if (esp_now_register_recv_cb(receive)!=ESP_OK) { esp_now_deinit(); return; }
   ready=true;
 #if RADIO_DEV_INSECURE
+  if(!radioTx.init() || esp_now_register_send_cb(txDone)!=ESP_OK) { ready=false; esp_now_deinit(); return; }
   static DevRadar radar(devAdapter,esp_random()|1); devRadar=&radar; Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
 #endif
 }
@@ -49,12 +55,12 @@ void beaconServiceUpdate() {
   while (budget-- && xQueueReceive(queue,&p,0)==pdTRUE) {
     RadioFrame rf{}; if (!radioDecode(p.bytes,sizeof(p.bytes),rf)) { ++malformed; continue; }
 #if RADIO_DEV_INSECURE
-    if (rf.type!=RadioMessage::Beacon) { devRadar->receive(p.mac,p.bytes,sizeof(p.bytes),millis()); continue; }
+    if (rf.type!=RadioMessage::Beacon) { Serial.printf("[DEV INSECURE] RX type=%s id=%u seq=%lu RSSI=%d channel=%u\n",devMessageName(rf.type),rf.id,(unsigned long)rf.sequence,p.rssi,beaconServiceChannel()); devRadar->receive(p.mac,p.bytes,sizeof(p.bytes),millis()); continue; }
 #endif
     BeaconFrame frame; if (!beaconDecode(p.bytes,sizeof(p.bytes),frame)) { ++malformed; continue; }
     BeaconAccept accepted=registry.accept(frame,p.mac,p.rssi,millis());
     #if RADIO_DEV_INSECURE
-    if (accepted==BeaconAccept::Accepted) devRadar->beacon(p.mac,frame.id,frame.boot_id,millis());
+    if (accepted==BeaconAccept::Accepted) { static uint32_t lastBeaconLog=0; if(uint32_t(millis()-lastBeaconLog)>=5000){lastBeaconLog=millis();Serial.printf("[DEV INSECURE] BEACON id=%u seq=%lu RSSI=%d channel=%u\n",frame.id,(unsigned long)frame.sequence,p.rssi,beaconServiceChannel());} devRadar->beacon(p.mac,frame.id,frame.boot_id,millis()); }
 #endif
     if (accepted==BeaconAccept::Conflict) ++conflicts;
     else if (accepted==BeaconAccept::Duplicate) ++duplicates;
@@ -62,6 +68,7 @@ void beaconServiceUpdate() {
   }
 #if RADIO_DEV_INSECURE
   devRadar->tick(millis());
+  radioTx.tick();
 #endif
 }
 uint8_t beaconServiceChannel() {
@@ -80,7 +87,7 @@ void beaconServicePrint(Stream &out) {
   for (unsigned i=0;i<7;++i) {
     const BeaconEntry &e=*registry.entry(i); uint32_t age=uint32_t(millis()-e.received); bool fresh=BeaconRegistry::fresh(e,millis());
     if (!e.seen) { out.printf("  #%u: NON RILEVATA\n",i+1); continue; }
-    out.printf("  #%u: %s signal=%d dBm age=%lu ms seq=%lu boot=%08lx battery=%u mV MAC=%02x:%02x:%02x:%02x:%02x:%02x\n",i+1,fresh?"RICEVUTA NON AUTENTICATA":"SCADUTA",e.rssi,(unsigned long)age,(unsigned long)e.frame.sequence,(unsigned long)e.frame.boot_id,e.frame.battery_valid?e.frame.battery_mv:0,e.mac[0],e.mac[1],e.mac[2],e.mac[3],e.mac[4],e.mac[5]);
+    out.printf("  #%u: %s signal=%d dBm age=%lu ms seq=%lu boot=%08lx battery=%u mV\n",i+1,fresh?"RICEVUTA NON AUTENTICATA":"SCADUTA",e.rssi,(unsigned long)age,(unsigned long)e.frame.sequence,(unsigned long)e.frame.boot_id,e.frame.battery_valid?e.frame.battery_mv:0);
   }
   out.println("[BEACON] RSSI non fornisce distanza o direzione; nessuna localizzazione reale.");
 }

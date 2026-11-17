@@ -15,7 +15,7 @@ WIN_OUT="${ROOT}/out-$1"
 CLI="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 mkdir -p "$STAGE" "$CACHE" "$OUT" "$WIN_OUT"
 cp "$PROJECT_DIR/examples/dragon_ball_beacon/dragon_ball_beacon.ino" "$STAGE/"
-cp "$PROJECT_DIR/include/beacon_protocol.h" "$PROJECT_DIR/src/beacon_protocol.cpp" "$PROJECT_DIR/include/dev_radio.h" "$PROJECT_DIR/src/dev_radio.cpp" "$PROJECT_DIR/include/radio_link.h" "$PROJECT_DIR/src/radio_link.cpp" "$STAGE/"
+cp "$PROJECT_DIR/include/beacon_protocol.h" "$PROJECT_DIR/src/beacon_protocol.cpp" "$PROJECT_DIR/include/dev_radio_tx.h" "$PROJECT_DIR/include/dev_radio.h" "$PROJECT_DIR/src/dev_radio.cpp" "$PROJECT_DIR/include/radio_link.h" "$PROJECT_DIR/src/radio_link.cpp" "$STAGE/"
 printf '#pragma once\n#define DRAGON_BALL_ID %d\n#define DRAGON_RADIO_CHANNEL %d\n' "$1" "$2" > "$STAGE/beacon_config.h"
 cd "$ROOT"
 "$CLI" compile --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=${RADIO_DEV_INSECURE:-0}" --fqbn "$3" --jobs 4 --build-path "$(wslpath -w "$CACHE")" --output-dir "$(wslpath -w "$WIN_OUT")" "$(wslpath -w "$STAGE")" < /dev/null
