@@ -1,0 +1,35 @@
+# Build outputs and caches
+build/
+.cache/
+.cache-*/
+*.o
+*.elf
+*.map
+*.merged.bin
+*.bootloader.bin
+*.partitions.bin
+*.ino.bin
+*.hex
+
+# Local/editor and OS state
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Private material / local diagnostics
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.*
+credentials.*
+logs/
+backups/
+dumps/
+*.log
+*.zip
