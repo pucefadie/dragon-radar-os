@@ -3,6 +3,10 @@
 #include "beacon_registry.h"
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include <esp_system.h>
+#ifndef RADIO_DEV_INSECURE
+#define RADIO_DEV_INSECURE 0
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <atomic>
@@ -10,6 +14,14 @@
 namespace {
 struct Packet { uint8_t mac[6]; uint8_t bytes[BEACON_FRAME_SIZE]; int8_t rssi; };
 BeaconRegistry registry; QueueHandle_t queue=nullptr; bool ready=false;
+#if RADIO_DEV_INSECURE
+uint32_t devSession=0, devSeq=0, devNext=0;
+void devSend(const uint8_t *mac, uint8_t id, RadioMessage type) {
+  if (!esp_now_is_peer_exist(mac)) { esp_now_peer_info_t peer={}; memcpy(peer.peer_addr,mac,6); peer.ifidx=WIFI_IF_STA; if (esp_now_add_peer(&peer)!=ESP_OK) return; }
+  RadioFrame f{}; f.type=type; f.id=0; f.destination=id; f.flags=RADIO_FLAG_DIRECTED; f.session=devSession; f.sequence=++devSeq; uint8_t bytes[RADIO_FRAME_SIZE]; radioEncode(f,bytes);
+  esp_err_t err=esp_now_send(mac,bytes,sizeof(bytes)); Serial.printf("[DEV INSECURE] TX %u err=%d\n",unsigned(type),int(err));
+}
+#endif
 std::atomic<uint32_t> dropped{0}; uint32_t malformed=0, conflicts=0, duplicates=0;
 void receive(const esp_now_recv_info_t *info, const uint8_t *data, int length) {
   if (!queue || !info || !info->src_addr || !data || length != (int)BEACON_FRAME_SIZE) return;
@@ -25,6 +37,9 @@ void beaconServiceInit() {
   if (esp_now_init()!=ESP_OK) return;
   if (esp_now_register_recv_cb(receive)!=ESP_OK) { esp_now_deinit(); return; }
   ready=true;
+#if RADIO_DEV_INSECURE
+  devSession=esp_random(); if (!devSession) devSession=1; Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
+#endif
 }
 void beaconServiceUpdate() {
   static uint32_t lastRetry=0;
@@ -32,8 +47,15 @@ void beaconServiceUpdate() {
   if (!ready || !queue) return;
   Packet p; unsigned budget=16;
   while (budget-- && xQueueReceive(queue,&p,0)==pdTRUE) {
+    RadioFrame rf{}; if (!radioDecode(p.bytes,sizeof(p.bytes),rf)) { ++malformed; continue; }
+#if RADIO_DEV_INSECURE
+    if (rf.type==RadioMessage::Pong && rf.destination==0) { Serial.printf("[DEV INSECURE] PONG id=%u\n",rf.id); continue; }
+#endif
     BeaconFrame frame; if (!beaconDecode(p.bytes,sizeof(p.bytes),frame)) { ++malformed; continue; }
     BeaconAccept accepted=registry.accept(frame,p.mac,p.rssi,millis());
+    #if RADIO_DEV_INSECURE
+    if (accepted==BeaconAccept::Accepted && frame.id==1 && int32_t(millis()-devNext)>=0) { devNext=millis()+3000; devSend(p.mac,frame.id,RadioMessage::Ping); }
+#endif
     if (accepted==BeaconAccept::Conflict) ++conflicts;
     else if (accepted==BeaconAccept::Duplicate) ++duplicates;
     else if (accepted==BeaconAccept::Invalid) ++malformed;

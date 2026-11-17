@@ -30,3 +30,7 @@ Questo repository è una copia Git indipendente, senza la cronologia locale diag
 ```
 
 Per la radio, verificare che entrambe le schede usino lo stesso canale e che l'antenna U.FL sia collegata. Nessun RSSI indica distanza o bearing. Prima del collaudo unicast implementare pairing e chiavi; CRC e MAC non autenticano il mittente.
+
+## Lavoro in corso: trasporto ESP-NOW di sviluppo
+
+È stato collegato un primo percorso sperimentale PING/PONG ai servizi ESP-NOW S3/C6, disabilitato per default. Per abilitarlo in build usare `RADIO_DEV_INSECURE=1` davanti a entrambi gli script. È traffico in chiaro, non autenticato, senza attuatori: non è pairing sicuro. Le build con tale opzione sono state avviate; consultare `/tmp/dragon-s3-dev-build.log` e `/tmp/dragon-c6-dev-build.log` per gli esiti. Nessuna prova radio è stata eseguita. Questo percorso è incompleto: restano discovery, heartbeat, ACK/retry, timeout, recovery canale e test di trasporto. Non considerarlo pronto per il collaudo completo.

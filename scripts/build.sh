@@ -94,6 +94,7 @@ W_LIBS='C:\Users\franc\AppData\Local\Temp\dragon_radar_build\libraries'
 echo "[BUILD] Compiling ${SKETCH_NAME} (mode=${MODE}) with FQBN=${FQBN}..."
 cd /mnt/c/Users/franc/AppData/Local/Temp/dragon_radar_build
 "${ARDUINO_CLI}" compile \
+  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=${RADIO_DEV_INSECURE:-0}" \
   --fqbn "${FQBN}" \
   --jobs 4 \
   --libraries "${W_LIBS}" \

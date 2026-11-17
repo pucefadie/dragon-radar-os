@@ -7,6 +7,16 @@
 #include <esp_system.h>
 #include "beacon_protocol.h"
 #include "beacon_config.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#ifndef RADIO_DEV_INSECURE
+#define RADIO_DEV_INSECURE 0
+#endif
+#if RADIO_DEV_INSECURE
+struct DevPacket { uint8_t mac[6], bytes[RADIO_FRAME_SIZE]; };
+static QueueHandle_t devQueue;
+static void devReceive(const esp_now_recv_info_t *info,const uint8_t *data,int len) { if (!devQueue || !info || !info->src_addr || !data || len!=RADIO_FRAME_SIZE) return; DevPacket p; memcpy(p.mac,info->src_addr,6); memcpy(p.bytes,data,RADIO_FRAME_SIZE); xQueueSend(devQueue,&p,0); }
+#endif
 #ifndef DRAGON_BALL_ID
 #define DRAGON_BALL_ID 1
 #endif
@@ -41,10 +51,25 @@ void setup() {
   peer.channel=DRAGON_RADIO_CHANNEL; peer.ifidx=WIFI_IF_STA; peer.encrypt=false;
   if (esp_now_add_peer(&peer)!=ESP_OK) { Serial.println("ESP-NOW peer failed"); return; }
   bootId=esp_random(); ready=true;
+#if RADIO_DEV_INSECURE
+  devQueue=xQueueCreate(8,sizeof(DevPacket));
+  if (!devQueue || esp_now_register_recv_cb(devReceive)!=ESP_OK) { Serial.println("DEV RX init failed"); ready=false; return; }
+  Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
+#endif
   Serial.printf("Dragon beacon ID=%d channel=%d (broadcast, not authenticated)\n",DRAGON_BALL_ID,DRAGON_RADIO_CHANNEL);
 }
 void loop() {
   if (!ready) { delay(100); return; }
+  #if RADIO_DEV_INSECURE
+  DevPacket packet; unsigned budget=8;
+  while (budget-- && xQueueReceive(devQueue,&packet,0)==pdTRUE) {
+    RadioFrame incoming{};
+    if (!radioDecode(packet.bytes,sizeof(packet.bytes),incoming) || incoming.type!=RadioMessage::Ping || incoming.id!=0 || incoming.destination!=DRAGON_BALL_ID || !(incoming.flags&RADIO_FLAG_DIRECTED)) continue;
+    if (!esp_now_is_peer_exist(packet.mac)) { esp_now_peer_info_t peer={}; memcpy(peer.peer_addr,packet.mac,6); peer.ifidx=WIFI_IF_STA; if (esp_now_add_peer(&peer)!=ESP_OK) continue; }
+    RadioFrame reply{}; reply.type=RadioMessage::Pong; reply.id=DRAGON_BALL_ID; reply.destination=0; reply.flags=RADIO_FLAG_DIRECTED; reply.session=bootId; reply.sequence=++sequence; reply.ack_sequence=incoming.sequence; uint8_t bytes[RADIO_FRAME_SIZE]; radioEncode(reply,bytes);
+    esp_err_t result=esp_now_send(packet.mac,bytes,sizeof(bytes)); Serial.printf("[DEV INSECURE] PING -> PONG err=%d\n",int(result));
+  }
+#endif
   if (int32_t(millis()-nextBeacon)>=0) {
     nextBeacon=millis()+470+(esp_random()%61); // ~500 ms, +/-30 ms jitter
     BeaconFrame frame={DRAGON_BALL_ID,false,bootId,sequence++,0};
