@@ -2,7 +2,9 @@
 
 Questo repository GitHub è uno **snapshot pulito della v0.3**. La cronologia diagnostica completa, i log di collaudo e i backup del dispositivo restano conservati soltanto nel repository locale originale.
 
-Il progetto mantiene la base Arduino collaudata per Waveshare ESP32-S3-Touch-AMOLED-1.75-G e include un esempio firmware per Seeed XIAO ESP32-C6. DRB2 ora indirizza frame tra controller ID 0 e sfere 1–7. Moduli host verificano policy pairing, replay e ACK/retry; non sono ancora integrati nel trasporto. Pairing persistente/autenticato e cifratura unicast restano incompleti; nessun test radio S3↔C6 è stato eseguito. Non interpretare RSSI come distanza o direzione.
+Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. Il ricevitore minimale ha già confermato sul banco la ricezione DRB2; il collaudo bidirezionale DRA1 e il provisioning su scheda restano da eseguire. Non interpretare RSSI come distanza o direzione.
+
+[Stato e verifiche](STATUS.md) · [Procedura M1c](M1C_BENCH_TEST.md) · [Piano sicurezza](SECURITY_PLAN.md)
 
 ## Hardware e pin
 
@@ -12,16 +14,16 @@ Sfera: XIAO ESP32-C6. Il firmware di esempio abilita il commutatore antenna este
 
 ## Build
 
-La build S3 usa Arduino CLI Windows richiamato da WSL, Arduino ESP32 Core 3.3.12 e il FQBN Waveshare con 16 MB flash, PSRAM OPI e partizione app3M/fat9M. La build C6 usa Arduino ESP32 Core 3.x e `esp32:esp32:XIAO_ESP32C6`.
+La build S3 usa Arduino CLI Windows richiamato da WSL, Arduino ESP32 Core 3.3.12 e il FQBN Waveshare con 16 MB flash, PSRAM OPI e partizione app3M/fat9M. La build C6 usa lo stesso core 3.3.12. Per il layout archiviato della sfera di banco usare `esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota`, che ha un solo slot app da 2 MiB.
 
 Prerequisiti: WSL su Windows, Arduino IDE/CLI e core ESP32 già installati; Python 3; dipendenze Waveshare incluse sotto `references/libraries`; decoder Espressif con licenza e provenienza in `lib/DragonEspAudioCodec`.
 
 ```bash
 ./scripts/build.sh full
-./scripts/build_beacon.sh 1 4 esp32:esp32:XIAO_ESP32C6
+DRAGON_BEACON_OUTPUT=build/c6-bench-nuova-build ./scripts/build_beacon.sh 1 6 esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota
 ```
 
-Le build scrivono gli artefatti sotto `build/`, esclusi da Git. Il canale `4` è un esempio: il radar e la sfera devono usare lo stesso canale effettivo. Non effettuare flash senza identificare prima la scheda e la partizione attiva. Gli script di flash del PC locale non sono inclusi nello snapshot.
+Le build scrivono gli artefatti sotto `build/`, esclusi da Git. Il canale `6` è quello previsto per questo banco: il radar e la sfera devono usare lo stesso canale effettivo. Non effettuare flash senza identificare prima la scheda e la partizione attiva. Gli script di flash del PC locale non sono inclusi nello snapshot.
 
 Per compilare su Linux, installare Arduino CLI nativo e il core ESP32 3.3.12:
 
@@ -54,6 +56,4 @@ Il test DRA1 richiede le intestazioni di sviluppo OpenSSL per verificare lo stes
 
 Non sono inclusi log diagnostici, dump/backup flash, credenziali, identificatori hardware individuali o impostazioni di porta seriale personali. Non inserire chiavi Wi-Fi, password, token o LMK nei sorgenti. Consultare [PROTOCOL_AND_POWER.md](PROTOCOL_AND_POWER.md) e [RESUME.md](RESUME.md) prima di ogni prova radio. Nessun firmware viene flashato automaticamente dai comandi di build.
 
-Build v0.3 eseguite dalla copia pulita: S3 1.768.887 byte applicazione (su 3.145.728), 71.100 byte globali; C6 961.976 byte (su 1.310.720), 41.616 byte globali. Il branch radio include due percorsi bidirezionali separati, DEV e autenticato. I mock e le build non sostituiscono il collaudo fisico. Vedere STATUS.md per lo stato corrente.
-
-Preparazione del primo collaudo e limiti correnti: [FIRST_RADIO_TEST.md](FIRST_RADIO_TEST.md).
+Le verifiche e gli hash correnti sono in [STATUS.md](STATUS.md). I file generati e i backup di banco restano fuori da Git.

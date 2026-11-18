@@ -1,73 +1,8 @@
-# Stato snapshot pulito Dragon Radar OS v0.3
+# Dragon Radar OS — ripresa M1c
 
-Branch di lavoro: `feat/espnow-m1-bidirectional`, partito da `main` aggiornato (`b0483cd`).
-Checkpoint pubblicato: `5ce4d48271594618733ecc74499696acc09241dd`; PR draft #2 aperta verso `main`: https://github.com/pucefadie/dragon-radar-os/pull/2. Non fare merge: la Milestone 1 è dichiarata incompleta nella PR.
+Branch `feat/espnow-m1-bidirectional`, [PR #2 draft](https://github.com/pucefadie/dragon-radar-os/pull/2). Baseline M1b `a43bfe7`, sorgenti firmware verificati `7ff019d`. Leggere [STATUS.md](STATUS.md) per l'evidenza vigente e la [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-6990108977) per i punti da ricontrollare. Gli appunti di banco precedenti, i log e i dump restano privati.
 
-Questo repository è una copia Git indipendente, senza la cronologia locale diagnostica. La cronologia completa e i backup restano nella directory privata locale originale.
-
-## Stato software
-
-- Follow-up review #2: una voce associata senza sessione autenticata è `AwaitingAuthenticatedSession`, non `Paired`/`Lost`; testati timestamp `millis()==0`, ricezione non autenticata, scadenza e refresh autenticato.
-
-- Build S3 dalla directory pulita: riuscita con Arduino ESP32 Core 3.3.12; 1.768.859 byte app su 3.145.728, 71.100 byte globali.
-- Build C6 dalla directory pulita: riuscita con Arduino ESP32 Core 3.x; 961.914 byte app su 1.310.720, 41.616 byte globali.
-- DRB2 broadcast resta compatibile; i frame diretti usano flag DIRECTED e campi riutilizzati per destinazione/payload length. ID controller 0, sfere 1–7, broadcast 255.
-- S3 riceve beacon e registra MAC/RSSI; esempio XIAO invia beacon ogni ~500 ms con jitter ±30 ms.
-- Moduli host `PairingRegistry`, `ReplayWindow`, `RadioAckTracker` e test per pairing window, replay, ACK errato/corretto, retry/timeout e indirizzamento passano con `-Wall -Wextra -Werror`.
-- Correzioni review #2: `last_seen` si aggiorna solo via `markAuthenticatedRx`; il cambio sessione replay richiede `beginAuthenticatedSession(..., authenticated_handshake=true)`; ACK tracker richiede MAC, sessione, peer/destinatario, tipo e sequenza. Nuovi casi negativi testati.
-- Le macchine host non sono ancora integrate nel trasporto. Pairing/autenticazione, NVS, LMK e cifratura unicast, ACK/retry effettivi e heartbeat end-to-end restano incompleti. Non dichiarare la milestone completata.
-- Build finale S3 riuscita: app 1.768.887 / 3.145.728 byte, globali 71.100 byte; SHA-256 `adb44d5b538925452c02c6098d734664305fd81581deef6247a07637205795af`.
-- Build finale C6 riuscita: app 961.976 / 1.310.720 byte, globali 41.616 byte; SHA-256 `87128d6d3552aec60eb0df659023d735a0195a5cd144079d227c084130b1b965`.
-- Build dopo le correzioni review: S3 riuscita, 1.768.887 byte app / 71.100 globali; binario invariato SHA-256 `adb44d5b538925452c02c6098d734664305fd81581deef6247a07637205795af`. C6 riuscita, 961.976 byte app / 41.616 globali; SHA-256 `5b18b1bcb8d0ffa1178c4e72ef28a2c48715543cc79602e44c21d67156c66ba7`.
-- Test host `beacon_protocol_test`, `radio_link_test`, `beacon_registry_test`: passati con `-Wall -Wextra -Werror`.
-- La Milestone 1 NON è completata: le state machine host non sono collegate al trasporto, manca TX/RX applicativo bidirezionale, pairing fisico, persistenza NVS, provisioning protetto LMK, cifratura ESP-NOW, heartbeat/ACK end-to-end e recovery canale AP. Nessun test radio fisico o flash è stato eseguito.
-
-## Avvio lavoro
-
-```bash
-./scripts/build.sh full
-./scripts/build_beacon.sh 1 4 esp32:esp32:XIAO_ESP32C6
-```
-
-Per la radio, verificare che entrambe le schede usino lo stesso canale e che l'antenna U.FL sia collegata. Nessun RSSI indica distanza o bearing. Prima del collaudo unicast implementare pairing e chiavi; CRC e MAC non autenticano il mittente.
-
-## Lavoro in corso: trasporto ESP-NOW di sviluppo
-
-È stato collegato un primo percorso sperimentale PING/PONG ai servizi ESP-NOW S3/C6, disabilitato per default. Per abilitarlo in build usare `RADIO_DEV_INSECURE=1` davanti a entrambi gli script. È traffico in chiaro, non autenticato, senza attuatori: non è pairing sicuro. Le build con tale opzione sono state avviate; consultare `/tmp/dragon-s3-dev-build.log` e `/tmp/dragon-c6-dev-build.log` per gli esiti. Nessuna prova radio è stata eseguita. Questo percorso è incompleto: restano discovery, heartbeat, ACK/retry, timeout, recovery canale e test di trasporto. Non considerarlo pronto per il collaudo completo.
-
-## Checkpoint trasporto DEV successivo
-
-`RADIO_DEV_INSECURE=1` abilita trasporto sperimentale NON autenticato: dal beacon ID 1 il radar invia discovery, PING, COMMAND diagnostico codice 0 e heartbeat; il C6 risponde STATUS, PONG e COMMAND_ACK. Il radar correla MAC, ID, sessione del beacon, destinatario e numero richiesta, con tre tentativi ogni 500 ms e timeout. `esp_now_send` segnala solo accodamento, non consegna. Il comando 0 non aziona periferiche; il C6 scarta altri comandi. Le callback RX copiano nella coda e il loop elabora i frame.
-
-Build DEV riuscite: S3 1.774.779 byte / 3.145.728, globali 71.180, `build/out/dragon_radar_sketch.ino.bin`, SHA-256 `ee91de5a68a4a9935862ddd33064b6772e94f4cbb103b62614aab302b2b5e2da`; C6 963.810 byte / 1.310.720, globali 41.624, `build/beacon-1/dragon_ball_beacon.ino.bin`, SHA-256 `9e9be3ab75667daae72b0f50ca7012bbf89d48ef09100fc7c6231fbb74876fab`. Esistenti test host codec, registry e radio_link passati. Nessun flash o collaudo fisico eseguito.
-
-PENDING: test mock end-to-end e verifiche duplicati/ripartenza/ACK perso, callback TX e code TX, stato timeout C6, rilevazione e recovery canale, provisioning e pairing sicuro, cifratura LMK. Canale C6 attualmente fissato in build; verificare canale effettivo S3 col comando seriale `beacons` e allineare il parametro build C6. Non cambiare il canale del radar associato a un AP. La PR resta draft.
-
-## Checkpoint revisione b361ab0
-
-Il C6 DEV limita ora l'associazione temporanea a un controller, segnala timeout dopo 10 s e richiede una nuova discovery dallo stesso MAC; un altro controller richiede il riavvio del C6. Build C6 DEV riuscita: 964.122 byte app, 41.640 byte globali, SHA-256 `319e3f2f627fd57a60a1090671afb242208434e7ef6e4b16269cd7abdea064a5`. Vedere FIRST_RADIO_TEST.md. Questo non completa la fase: mancano test mock dei firmware, unificazione ACK/retry, callback e code TX, recovery automatico del canale, build predefinite aggiornate e prova fisica. Nessun flash eseguito.
-
-## Lavoro in corso: simulazione condivisa DEV
-
-`DevRadar` e `DevSphere` in `src/dev_radio.cpp` sono utilizzati dagli adapter S3/C6 e dal test `tests/dev_radio_test.cpp`; test host PASS con `-Wall -Wextra -Werror` per discovery, PING/PONG, command 0/ACK, heartbeat, perdita risposta, retry, MAC/ID/sessione/ACK errati, timeout, disconnessione C6, reboot e rollover. Il mock non verifica le API o la radio hardware. Le build di questa revisione sono in corso: `/tmp/dragon-dev-shared-s3.log` e `/tmp/dragon-dev-shared-c6.log`; non assumere completate senza esito. Il vecchio `RadioAckTracker` per traffico autenticato è ancora separato dalla macchina DEV: unificazione PENDING. Callback TX/coda TX, canale automatico, cifratura e test fisici PENDING. Non viene passato `authenticated=true` dalla modalità DEV. La diagnostica seriale di risposta applicativa e timeout è da ripristinare prima del test fisico.
-
-## Verifiche della simulazione condivisa (`70cec82`)
-
-- PASS: `g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/dev_radio_test.cpp src/dev_radio.cpp src/beacon_protocol.cpp -o /tmp/dragon-dev-radio-test && /tmp/dragon-dev-radio-test`. Simula discovery, ping, comando innocuo e heartbeat, ACK perso con retry, risposte errate o tardive, timeout, recupero, reboot, radio occupata e rollover. Il mock usa gli stessi metodi degli adapter, non il driver ESP-NOW.
-- PASS: test host `beacon_protocol_test` e `radio_link_test` con gli stessi flag.
-- PASS: S3 DEV, 1.774.995 byte app / 3.145.728, 71.228 byte globali, `build/dev-snapshot/s3.bin`, SHA-256 `e3f25370c585f12d1462b8c0c62a9cc356c8dc22bf42e4349745449ef88367ae`.
-- PASS: C6 DEV, 965.508 byte app / 1.310.720, 41.664 byte globali, `build/dev-snapshot/c6.bin`, SHA-256 `e21492b906401bd2420398cda6a540d586b178de0cb5c77026a18e66cbd48955`.
-- PASS: S3 default, 1.768.923 byte app / 3.145.728, 71.100 byte globali; `build/out/dragon_radar_sketch.ino.bin`, SHA-256 `8918f6ff6e8e8d903dea4b9c6a5cfb8721aa0ee682e9f44ca02fa5d804b5ecd3`.
-- PASS: C6 default, 961.976 byte app / 1.310.720, 41.616 byte globali; `build/beacon-1/dragon_ball_beacon.ino.bin`, SHA-256 `15e114efcf356fb1256a7fdd1dc72329890bccc710774d59ff9837749aaa4043`.
-- PASS: stringhe DEV presenti nei due binari DEV e assenti nei due default. Le build hanno riportato avvisi PowerShell sul profilo personale ma codice di uscita zero.
-- NOT RUN: collaudo radio fisico, callback TX/coda TX e pairing sicuro/LMK; non sono implementati. `RadioAckTracker` autenticato e retry DEV sono ancora separati, come indicato nella PR. La ricerca automatica del canale e la diagnostica seriale delle risposte restano da implementare. Una radio costantemente occupata può mantenere una richiesta DEV pendente indefinitamente: prevedere un limite prima del collaudo.
-
-## Preparazione collaudo radio: timeout e TX
-
-- PASS host: `tests/dev_radio_test.cpp` con `-Wall -Wextra -Werror` verifica timeout assoluto a 4 s con `send()` sempre falso, evento e stato `TxBusyTimeout`, rollover e recupero via discovery; mantiene i casi end-to-end e ACK duplicato/tardivo. `tests/dev_radio_tx_test.cpp` con mock FreeRTOS/driver verifica coda piena, un solo invio in volo, completamenti TX riusciti/falliti, errore enqueue del driver, timeout callback e scadenza frame. PASS anche test host protocollo, registry e radio_link.
-- PASS build S3 DEV: 1.776.871 / 3.145.728 byte app, 71.244 byte globali, `build/dev-tx/s3.bin`, SHA-256 `1b8ce3f05aaea5230a24cc07b9b428364ded54f1379b480c298ff85131314d91`.
-- PASS build C6 DEV: 967.514 / 1.310.720 byte app, 41.688 byte globali, `build/dev-tx/c6.bin`, SHA-256 `e66822b195cf083ca15583b50c57a6bd0880a81284460eec5b5a3a1028a17d52`.
-- PASS build S3 default: 1.768.859 / 3.145.728 byte app, 71.100 byte globali, `build/out/dragon_radar_sketch.ino.bin`, SHA-256 `64cea3350219a6d686508cb7ccd224ea77e4812dd6c28240cabbb41c045d9e78`.
-- PASS build C6 default: 961.976 / 1.310.720 byte app, 41.616 byte globali, `build/beacon-1/dragon_ball_beacon.ino.bin`, SHA-256 `2414092c13268ac66a790332242435431f468877bdef12eec1c1f7c4d0420c7c`. Le stringhe DEV sono assenti nei due default e presenti nei due DEV. Avvisi profilo PowerShell non impediscono la compilazione.
-- NOT RUN: test fisici S3↔C6 e flash. Il mock non dimostra il comportamento del driver reale.
-- DEV limita la prova alla sfera 1, senza autenticazione né attuatori. La callback TX accoda solo esiti, con un solo invio ESP-NOW in volo; se manca il completamento per 3 s sospende ulteriori invii fino a callback o riavvio. Un frame in coda scade dopo 1 s. `RadioAckTracker` autenticato resta separato dalla logica DEV, senza passaggi fittizi di autenticazione. Pairing sicuro, LMK e recovery automatico del canale sono PENDING. Fare riferimento a FIRST_RADIO_TEST.md e identificare le porte prima di qualsiasi flash autorizzato.
+- **M1b software:** DRA1 con peer ESP-NOW cifrato, handshake HMAC e anti-replay, probe e ACK applicativo per ID 1. La build standard carica un record NVS fornito deliberatamente via utility USB separata. DEV resta diagnostico e non autenticato. I test host e le build non provano il driver sul banco.
+- **Evidenza fisica storica:** i primi tentativi con radar diagnostico non rilevarono beacon. Il successivo ricevitore minimale S3 sul canale 6 confermò 10 beacon DRB2 e conservò la NVS byte per byte. Alla fine OTA1 risultava selezionato e OTA0 integro. Non assumere lo stesso stato alla prossima connessione. L'ultima app C6 osservata era DEV, ID 1, canale 6, antenna interna.
+- **Preflight M1c:** il C6 archiviato ha un solo slot `no_ota`; usare candidati compilati per quel profilo. Il backup integrale C6 è anteriore all'app DEV corrente. Serve ancora una cattura live dell'app, NVS e metadati. Verificare isolamento del motore S3 prima di avviare l'app standard.
+- **Ripartenza:** seguire [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md). La generazione effettiva delle chiavi e ogni scrittura attendono una sessione autorizzata. Per la confidenzialità a riposo e il recupero futuro vedere [SECURITY_PLAN.md](SECURITY_PLAN.md).
