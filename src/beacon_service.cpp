@@ -4,6 +4,8 @@
 #include "dev_radio.h"
 #if RADIO_DEV_INSECURE
 #include "dev_radio_tx.h"
+#elif !defined(RADIO_RX_HOST_TEST)
+#include "secure_radio_espnow.h"
 #endif
 #include <esp_now.h>
 #include <esp_wifi.h>
@@ -27,6 +29,11 @@ class DevAdapter : public DevRadioTransport { public: bool send(const uint8_t *m
  } void event(DevEvent e,uint8_t id,uint32_t seq,uint32_t value) override {const char *names[]={"TX_BUSY_TIMEOUT","TIMEOUT","LINK_LOST","LINK_RECOVERED","RESPONSE"};Serial.printf("[DEV INSECURE] %s id=%u seq=%lu RTT=%lu ms channel=%u\n",names[unsigned(e)],id,(unsigned long)seq,(unsigned long)value,beaconServiceChannel());}
 };
 DevAdapter devAdapter; DevRadar *devRadar=nullptr;
+#elif !defined(RADIO_RX_HOST_TEST)
+DevRadioTx secureTx;
+SecureEspNow secure(secureTx);
+bool secureReady=false;
+void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { secureTx.completed(status); }
 #endif
 std::atomic<uint32_t> dropped{0}, callbacks{0}, badMetadata{0}, len34{0}, lenOther{0}, queued{0};
 uint32_t malformed=0, conflicts=0, duplicates=0, delivered=0, magicOk=0, magicBad=0, protocolOk=0, protocolBad=0, crcOk=0, crcBad=0, beaconType=0, otherType=0, idOk=0, idBad=0, decoded=0, acceptedCount=0, rejected=0, rejectInvalid=0;
@@ -39,6 +46,9 @@ void wifiEvent(WiFiEvent_t event) {
 }
 void receive(const esp_now_recv_info_t *info, const uint8_t *data, int length) {
   ++callbacks;
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (length==SECURE_RADIO_SIZE) secure.enqueue(info,data,length);
+#endif
   if (length == (int)BEACON_FRAME_SIZE) ++len34; else ++lenOther;
   if (!info || !info->src_addr || !info->rx_ctrl || !data) { ++badMetadata; return; }
   if (!queue || length != (int)BEACON_FRAME_SIZE) return;
@@ -58,6 +68,12 @@ void beaconServiceInit() {
   initResult=esp_now_init(); if (initResult!=ESP_OK) return;
   rxRegisterResult=esp_now_register_recv_cb(receive); if (rxRegisterResult!=ESP_OK) { esp_now_deinit(); return; }
   ready=true;
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureTx.init(false)) {
+    txRegisterResult=esp_now_register_send_cb(txDone);
+    secureReady=txRegisterResult==ESP_OK && secure.begin(true);
+  }
+#endif
 #if RADIO_DEV_INSECURE
   if(!radioTx.init()) { ready=false; esp_now_deinit(); return; }
   txRegisterResult=esp_now_register_send_cb(txDone); if(txRegisterResult!=ESP_OK) { ready=false; esp_now_deinit(); return; }
@@ -96,6 +112,8 @@ void beaconServiceUpdate() {
 #if RADIO_DEV_INSECURE
   devRadar->tick(millis());
   radioTx.tick();
+#elif !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) { secure.tick(millis()); secureTx.tick(); }
 #endif
 }
 uint8_t beaconServiceChannel() {
@@ -124,5 +142,8 @@ void beaconServicePrint(Stream &out) {
     if (!e.seen) { out.printf("  #%u: NON RILEVATA\n",i+1); continue; }
     out.printf("  #%u: %s signal=%d dBm age=%lu ms seq=%lu boot=%08lx battery=%u mV\n",i+1,fresh?"RICEVUTA NON AUTENTICATA":"SCADUTA",e.rssi,(unsigned long)age,(unsigned long)e.frame.sequence,(unsigned long)e.frame.boot_id,e.frame.battery_valid?e.frame.battery_mv:0);
   }
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  secure.print(out,millis());
+#endif
   out.println("[BEACON] RSSI non fornisce distanza o direzione; nessuna localizzazione reale.");
 }

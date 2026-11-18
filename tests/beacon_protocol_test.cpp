@@ -2,6 +2,23 @@
 #include <cassert>
 #include <cstring>
 int main() {
+  // DRB2 before DIRECTED was introduced, and the current directed wire layout.
+  constexpr uint8_t broadcast[34]={
+    0x44,0x52,0x42,0x32,2,1,1,0,4,3,2,1,0x44,0x33,0x22,0x11,
+    0,0,0,0,0,0,3,0,0x74,0x0e,1,0,0,0,0,0,0x8e,0x74};
+  constexpr uint8_t directed[34]={
+    0x44,0x52,0x42,0x32,2,9,0,3,4,3,2,1,0x44,0x33,0x22,0x11,
+    0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0xe3,0x40};
+  uint8_t encoded[34];
+  beaconEncode(BeaconFrame{1,true,0x01020304,0x11223344,3700},encoded);
+  assert(!std::memcmp(broadcast,encoded,sizeof(encoded)));
+  RadioFrame golden{};
+  assert(radioDecode(broadcast,sizeof(broadcast),golden));
+  assert(golden.destination==RADIO_ID_BROADCAST);
+  assert(radioDecode(directed,sizeof(directed),golden));
+  assert(golden.id==0 && golden.destination==1 && golden.flags==3 && golden.payload_length==1);
+  radioEncode(golden,encoded);
+  assert(!std::memcmp(directed,encoded,sizeof(encoded)));
   uint8_t data[BEACON_FRAME_SIZE]; BeaconFrame in={7,true,0x12345678,0xfedcba98,3700}, out={};
   beaconEncode(in,data); assert(beaconDecode(data,sizeof(data),out));
   assert(out.id==7 && out.boot_id==in.boot_id && out.sequence==in.sequence && out.battery_mv==3700 && out.battery_valid);

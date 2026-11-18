@@ -37,12 +37,13 @@ Ogni compilazione richiede una directory nuova e salva i binari in `artifacts/`.
 ## Test host
 
 ```bash
-g++ -std=c++11 -Wall -Wextra -Werror -DRADIO_DEV_INSECURE=0 -Itests/rx_mocks -Iinclude tests/beacon_rx_diagnostics_test.cpp src/beacon_service.cpp src/beacon_protocol.cpp src/beacon_registry.cpp -o /tmp/beacon_rx_test && /tmp/beacon_rx_test
-g++ -std=c++11 -Wall -Wextra -Werror -Itests/tx_mocks -Iinclude tests/dev_radio_tx_test.cpp -o /tmp/dev_radio_tx_test && /tmp/dev_radio_tx_test
+g++ -std=c++11 -Wall -Wextra -Werror -DRADIO_DEV_INSECURE=0 -DRADIO_RX_HOST_TEST -Itests/rx_mocks -Iinclude tests/beacon_rx_diagnostics_test.cpp src/beacon_service.cpp src/beacon_protocol.cpp src/beacon_registry.cpp -o /tmp/beacon_rx_test && /tmp/beacon_rx_test
+g++ -std=c++11 -Wall -Wextra -Werror -DRADIO_DEV_INSECURE=1 -Itests/tx_mocks -Iinclude tests/dev_radio_tx_test.cpp -o /tmp/dev_radio_tx_test && /tmp/dev_radio_tx_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/dev_radio_test.cpp src/dev_radio.cpp src/beacon_protocol.cpp -o /tmp/dev_radio_test && /tmp/dev_radio_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/beacon_protocol_test.cpp src/beacon_protocol.cpp -o /tmp/protocol_test && /tmp/protocol_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/beacon_registry_test.cpp src/beacon_registry.cpp src/beacon_protocol.cpp -o /tmp/registry_test && /tmp/registry_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/radio_link_test.cpp src/radio_link.cpp src/beacon_protocol.cpp -o /tmp/radio_link_test && /tmp/radio_link_test
+g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/secure_radio_test.cpp src/secure_radio.cpp src/radio_link.cpp -lcrypto -o /tmp/secure_radio_test && /tmp/secure_radio_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/proximity_engine_test.cpp src/proximity_engine.cpp -o /tmp/proximity_test && /tmp/proximity_test
 ```
 
@@ -50,6 +51,6 @@ g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/proximity_engine_test.cpp s
 
 Non sono inclusi log diagnostici, dump/backup flash, credenziali, identificatori hardware individuali o impostazioni di porta seriale personali. Non inserire chiavi Wi-Fi, password, token o LMK nei sorgenti. Consultare [PROTOCOL_AND_POWER.md](PROTOCOL_AND_POWER.md) e [RESUME.md](RESUME.md) prima di ogni prova radio. Nessun firmware viene flashato automaticamente dai comandi di build.
 
-Build v0.3 eseguite dalla copia pulita: S3 1.768.887 byte applicazione (su 3.145.728), 71.100 byte globali; C6 961.976 byte (su 1.310.720), 41.616 byte globali. Il branch radio aggiunge solo moduli host-testati e jitter al beacon; la comunicazione bidirezionale non è ancora collaudabile.
+Build v0.3 eseguite dalla copia pulita: S3 1.768.887 byte applicazione (su 3.145.728), 71.100 byte globali; C6 961.976 byte (su 1.310.720), 41.616 byte globali. Il branch radio include due percorsi bidirezionali separati, DEV e autenticato. I mock e le build non sostituiscono il collaudo fisico. Vedere STATUS.md per lo stato corrente.
 
 Preparazione del primo collaudo e limiti correnti: [FIRST_RADIO_TEST.md](FIRST_RADIO_TEST.md).

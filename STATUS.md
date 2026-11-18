@@ -26,14 +26,20 @@
 - Prima di merge verso `main`: revisione e approvazione esplicita della PR.
 - Non usare risultati mock per dichiarare M1 conclusa.
 
-## Protocollo di aggiornamento per Codex (sostituire questa sezione a ogni checkpoint)
-**Branch/SHA:** [riportare reale]
-**Attività appena conclusa:** [file/componenti]
-**Test PASS:** [comando + esito]
-**Test FAIL:** [comando + errore]
-**Test NOT RUN:** [motivazione]
-**Hardware toccato:** NO salvo via libera esplicito
-**Push GitHub:** [riuscito/negato; SHA remoto]
-**Blocchi reali:** [nessuno o descrivere]
-**Prossime 3 azioni:** [ordinate]
-**Intervento utente:** [solo se indispensabile]
+## Checkpoint M1b — implementazione offline (2026-11-18)
+
+**Branch/base remota:** `feat/espnow-m1-bidirectional`, base `6a210e2`. PR #2 draft. Committi locali recuperati senza forzature; modifiche di banco tenute separate. Revisione AI #3 `6988679373` letta.
+
+**Attività appena conclusa:** DRA1 standard per una sfera (ID 1), peer ESP-NOW cifrato, handshake HMAC a doppia sfida, anti-replay, ACK diagnostico e retry, schema NVS versionato, generatore offline e utility di provisioning cablata. DEV separato, coda driver a un solo invio in volo, aggiunta peer limitata e recupero da callback tardiva. Vettori binari DRB2 broadcast/directed.
+
+**Test PASS:** 8 suite host con `g++ -std=c++11 -Wall -Wextra -Werror` (README). Inclusi handshake, retry, collisioni/destinazione, replay e riavvio, compatibilità e code.
+
+**Test NOT RUN:** collaudo fisico bidirezionale e provisioning su scheda. Come evidenza storica distinta, il ricevitore minimale separato ha ricevuto 10 DRB2 validi confermati sul canale 6 e l'intera NVS era identica dopo il test. Quella prova non verifica DRA1.
+
+**Build:** S3 e C6 standard/DEV e utility di provisioning in compilazione offline con Arduino ESP32 3.3.12. I risultati di questa revisione saranno registrati nel checkpoint di verifica.
+
+**Hardware toccato in questo ciclo:** NO. **Push:** da eseguire dopo verifica delle build, senza forzature.
+
+**Blocchi reali:** nessuno per continuare la verifica software. Cifratura a riposo, rotazione/revoca e collaudo fisico non validati; vincolo del singolo peer e canale esplicito.
+
+**Prossime tre azioni:** finalizzare compilazioni e controlli di build; rivedere protezione a riposo e procedura di provisioning/rollback prima del banco; collaudare handshake cifrato, perdita/recovery e retry con autorizzazione separata.
