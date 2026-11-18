@@ -23,9 +23,21 @@ Prerequisiti: WSL su Windows, Arduino IDE/CLI e core ESP32 già installati; Pyth
 
 Le build scrivono gli artefatti sotto `build/`, esclusi da Git. Il canale `4` è un esempio: il radar e la sfera devono usare lo stesso canale effettivo. Non effettuare flash senza identificare prima la scheda e la partizione attiva. Gli script di flash del PC locale non sono inclusi nello snapshot.
 
+Per compilare su Linux, installare Arduino CLI nativo e il core ESP32 3.3.12:
+
+```bash
+arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core install esp32:esp32@3.3.12 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+RADIO_DEV_INSECURE=1 ./scripts/build_linux.sh build/s3-dev-nuova-build
+RADIO_DEV_INSECURE=0 ./scripts/build_linux.sh build/s3-standard-nuova-build
+```
+
+Ogni compilazione richiede una directory nuova e salva i binari in `artifacts/`. Lo script usa le librerie del repository e accetta `ARDUINO_CLI` per indicare un eseguibile diverso da quello nel PATH.
+
 ## Test host
 
 ```bash
+g++ -std=c++11 -Wall -Wextra -Werror -DRADIO_DEV_INSECURE=0 -Itests/rx_mocks -Iinclude tests/beacon_rx_diagnostics_test.cpp src/beacon_service.cpp src/beacon_protocol.cpp src/beacon_registry.cpp -o /tmp/beacon_rx_test && /tmp/beacon_rx_test
 g++ -std=c++11 -Wall -Wextra -Werror -Itests/tx_mocks -Iinclude tests/dev_radio_tx_test.cpp -o /tmp/dev_radio_tx_test && /tmp/dev_radio_tx_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/dev_radio_test.cpp src/dev_radio.cpp src/beacon_protocol.cpp -o /tmp/dev_radio_test && /tmp/dev_radio_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/beacon_protocol_test.cpp src/beacon_protocol.cpp -o /tmp/protocol_test && /tmp/protocol_test
