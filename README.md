@@ -32,7 +32,7 @@ RADIO_DEV_INSECURE=1 ./scripts/build_linux.sh build/s3-dev-nuova-build
 RADIO_DEV_INSECURE=0 ./scripts/build_linux.sh build/s3-standard-nuova-build
 ```
 
-Ogni compilazione richiede una directory nuova e salva i binari in `artifacts/`. Lo script usa le librerie del repository e accetta `ARDUINO_CLI` per indicare un eseguibile diverso da quello nel PATH.
+Ogni compilazione S3 Linux richiede una directory nuova e salva i binari in `artifacts/`. Lo script usa le librerie del repository e accetta `ARDUINO_CLI` per indicare un eseguibile diverso da quello nel PATH. Per isolare una build C6 Windows da snapshot precedenti, aggiungere `DRAGON_BEACON_OUTPUT=build/c6-directory-nuova` a `scripts/build_beacon.sh`.
 
 ## Test host
 
@@ -45,7 +45,10 @@ g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/beacon_registry_test.cpp sr
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/radio_link_test.cpp src/radio_link.cpp src/beacon_protocol.cpp -o /tmp/radio_link_test && /tmp/radio_link_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/secure_radio_test.cpp src/secure_radio.cpp src/radio_link.cpp -lcrypto -o /tmp/secure_radio_test && /tmp/secure_radio_test
 g++ -std=c++11 -Wall -Wextra -Werror -Iinclude tests/proximity_engine_test.cpp src/proximity_engine.cpp -o /tmp/proximity_test && /tmp/proximity_test
+python3 tests/make_radio_records_test.py
 ```
+
+Il test DRA1 richiede le intestazioni di sviluppo OpenSSL per verificare lo stesso HMAC-SHA-256 usato dal firmware.
 
 ## Privacy e stato
 

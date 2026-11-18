@@ -30,16 +30,27 @@
 
 **Branch/base remota:** `feat/espnow-m1-bidirectional`, base `6a210e2`. PR #2 draft. Committi locali recuperati senza forzature; modifiche di banco tenute separate. Revisione AI #3 `6988679373` letta.
 
+**Commit firmware verificato:** `7ff019d`.
+
 **Attività appena conclusa:** DRA1 standard per una sfera (ID 1), peer ESP-NOW cifrato, handshake HMAC a doppia sfida, anti-replay, ACK diagnostico e retry, schema NVS versionato, generatore offline e utility di provisioning cablata. DEV separato, coda driver a un solo invio in volo, aggiunta peer limitata e recupero da callback tardiva. Vettori binari DRB2 broadcast/directed.
 
-**Test PASS:** 8 suite host con `g++ -std=c++11 -Wall -Wextra -Werror` (README). Inclusi handshake, retry, collisioni/destinazione, replay e riavvio, compatibilità e code.
+**Test PASS:** 8 suite host con `g++ -std=c++11 -Wall -Wextra -Werror` e `python3 tests/make_radio_records_test.py` (comandi nel README). Coperti handshake HMAC, ACK perso, retry, MAC o frame errati, replay dopo riavvio, scadenza, vettori DRB2, overflow e timeout TX, schema/permessi e rifiuto sovrascrittura dei record. **Test FAIL:** nessuno a fine verifica.
 
 **Test NOT RUN:** collaudo fisico bidirezionale e provisioning su scheda. Come evidenza storica distinta, il ricevitore minimale separato ha ricevuto 10 DRB2 validi confermati sul canale 6 e l'intera NVS era identica dopo il test. Quella prova non verifica DRA1.
 
-**Build:** S3 e C6 standard/DEV e utility di provisioning in compilazione offline con Arduino ESP32 3.3.12. I risultati di questa revisione saranno registrati nel checkpoint di verifica.
+**Build PASS:** Arduino ESP32 3.3.12. S3 con `RADIO_DEV_INSECURE=0|1 scripts/build_linux.sh <nuova-directory>`. C6 con `RADIO_DEV_INSECURE=0|1 DRAGON_BEACON_OUTPUT=<nuova-directory> scripts/build_beacon.sh 1 6 esp32:esp32:XIAO_ESP32C6`. Utility di provisioning separata compilata con entrambi gli FQBN. Snapshot locale ignorato da Git `build/m1-review-VpK1MB`, con log e manifest. I binari standard contengono il marker sicuro e non quello DEV. Validati target e integrità immagine su tutti e sei i binari. I sorgenti radio nello staging corrispondono a `7ff019d`; le modifiche locali dell'antenna C6 non sono incluse nei binari verificati.
 
-**Hardware toccato in questo ciclo:** NO. **Push:** da eseguire dopo verifica delle build, senza forzature.
+| Immagine applicativa | Byte del binario | SHA-256 |
+|---|---:|---|
+| S3 standard | 1782000 | `d8e31f154e1e51c4d0636d37b2b949c29b96d4ea4f0631e60351461bfd057a9f` |
+| S3 DEV | 1779120 | `7258e83939fdd7ab8c544cf434760023b3952efcb987c13114f4f24bc10c507d` |
+| C6 standard | 970832 | `99b1a70dc55aa68b12a7c6b8c50b8328a38a25d5febb04a061a0308f7d333a39` |
+| C6 DEV | 967312 | `f6bb6a9b6fc197976ca16eb8bd167fe42a8d3ef6889c97c89385af113cf1b270` |
+| Provisioning S3 | 312112 | `7601bc33f7613721085b4135f344319289d5e8b6a5976e1b8e873cceca6f3eb5` |
+| Provisioning C6 | 262976 | `0fef57e8624b3d315ea63f63f464b06e73830b375a3be24bbaecdd5036c041af` |
 
-**Blocchi reali:** nessuno per continuare la verifica software. Cifratura a riposo, rotazione/revoca e collaudo fisico non validati; vincolo del singolo peer e canale esplicito.
+**Hardware toccato in questo ciclo:** NO. **Pubblicazione:** checkpoint destinato al solo branch tracciato, in fast-forward. PR #2 draft.
 
-**Prossime tre azioni:** finalizzare compilazioni e controlli di build; rivedere protezione a riposo e procedura di provisioning/rollback prima del banco; collaudare handshake cifrato, perdita/recovery e retry con autorizzazione separata.
+**Blocchi reali:** manca l'evidenza fisica per M1c. Cifratura a riposo, rotazione/revoca, ricerca automatica del canale e supporto multiplo sono fuori dal prototipo a singolo peer. I record NVS sono leggibili da chi accede alla flash senza cifratura; non usare fuori banco prima della scelta sulla protezione a riposo. Il recupero da cambio canale presuppone il riallineamento; in caso di callback TX definitivamente persa, riavviare.
+
+**Prossime tre azioni:** rivedere protezione a riposo e procedura di provisioning/rollback; in sessione autorizzata provisionare una coppia su USB e provare il collegamento cifrato; misurare perdita/ACK e recupero da riavvio o cambio canale con prove negative e log correlati. M1 resta aperta. L'intervento utente è necessario solo per la decisione sui segreti a riposo e per autorizzare e predisporre il prossimo banco.
