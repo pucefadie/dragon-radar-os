@@ -1,0 +1,45 @@
+name: Project AI Watch
+on:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  checks: read
+
+concurrency:
+  group: project-ai-watch-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Review only changed commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Checkout trusted automation on main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Inspect branch and review changes
+        uses: actions/github-script@v7
+        env:
+          PROJECT_NAME: 'Dragon Radar OS'
+          TARGET_BRANCH: 'feat/espnow-m1-bidirectional'
+          STATUS_PATH: 'STATUS.md'
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.AI_REVIEW_MODEL || 'gpt-5-mini' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const watch = require('./.github/scripts/project-watch.cjs');
+            await watch({ github, context, core });
