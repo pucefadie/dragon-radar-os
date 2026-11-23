@@ -1,6 +1,6 @@
 # Dragon Radar OS — stato M1
 
-**Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1c fisica:** `0966740` · **PR #2:** draft. La [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-7100886934) ha segnalato isolamento dei flag, limiti della prova CCMP e verifica degli errori PMK. La procedura di riferimento è [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md).
+**Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1c fisica:** `0966740` · **PR #2:** draft. La [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-7102333493) ha segnalato i controlli su compatibilità DRC1/DRC2, sequenza PMK/peer e disponibilità dell'API NVS. La procedura di riferimento è [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md).
 
 | Stato | Evidenza |
 |---|---|
@@ -119,14 +119,18 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 - **PASS recupero offline** due backup originali S3 da 16 MiB, due snapshot pre-M1c C6 da 4 MiB e hash dei readback applicativi del collaudo M1c riverificati. Prima di una futura scrittura servono due nuove catture delle regioni live. Il recupero dell'app C6 passa da ROM e dallo stesso slot.
 - **NOT RUN hardware M1d** nessun contatto con le schede in questa fase. I PASS fisici sopra sono del checkpoint M1c. Restano collaudo DRC1 con i nuovi firmware radio standard, prova coordinata DRC2, ritorno fisico e cattura CCMP. Il profilo standard di prodotto S3, con UI e periferiche, richiede una prova distinta da quella del percorso radio protetto.
 
-### Build verificate al checkpoint di pausa
+### Build M1d verificate
 
-Arduino ESP32 3.3.12. Verificati formato, hash, marker e corrispondenza alle tabelle partizioni archiviate per i candidati sotto. S3 standard completo, S3 DEV, fixture S3 e C6 DEV restano da verificare al rientro.
+Nove build **PASS** con Arduino ESP32 3.3.12. S3 compilato su Linux, C6 su Windows dallo sketch tracciato. Verificati sorgenti in staging, header di destinazione, checksum, hash d'immagine, marker, slot e tabella partizioni archiviata. Audit avvio protetto **PASS** per le varianti S3 banco, provisioning e fixture e C6 radio e provisioning. La configurazione standard non contiene comandi fixture, marker DEV o il vecchio flag PMK.
 
-| Candidato | Byte | SHA-256 |
-|---|---:|---|
-| s3-bench | 879776 | `ad5f266a3cea3b32137095e5693452bccce01ce0948d7886f5bb76c4988e3f40` |
-| s3-provision | 378304 | `41f4320af57026ea17e722370a98523bfa75d7ca545082520e45851927decdb7` |
-| c6-radio | 965008 | `31e5fbc62c5936098530e5baff4654e33e96b1f321dfdb1176f4c9e8069f5eed` |
-| c6-provision | 245312 | `a4b8ea25bc2f4b609a586e297386cdf441b67f797e1298fe7f771ef3cbd455f5` |
-| c6-standard | 972416 | `11ca28197d34723d44da45de2aff5f76e79c90edd2d337f2d97462af32404acb` |
+| Candidato | Byte | SHA-256 | Intervallo massimo di erase dell'app |
+|---|---:|---|---|
+| s3-bench | 879776 | `ad5f266a3cea3b32137095e5693452bccce01ce0948d7886f5bb76c4988e3f40` | `0x310000–0x3e6fff` |
+| s3-provision | 378304 | `41f4320af57026ea17e722370a98523bfa75d7ca545082520e45851927decdb7` | `0x310000–0x36cfff` |
+| s3-fixture | 880816 | `6db15d7913cd529580f6716fea5683f4f6fb8e235c07507ccf21083e14a8fbf0` | `0x310000–0x3e7fff` |
+| s3-standard | 1783552 | `03ccf7f31e6449bb6d891a5b2168dfa9331a6cc92c881d22e2449384a0ba8c25` | `0x310000–0x4c3fff` |
+| s3-dev | 1779232 | `0ecdbf91323a20debf15b6d6331de0360661f5980db19bb47a1ebff64cb2ec9d` | `0x310000–0x4c2fff` |
+| c6-radio | 965008 | `31e5fbc62c5936098530e5baff4654e33e96b1f321dfdb1176f4c9e8069f5eed` | `0x10000–0xfbfff` |
+| c6-provision | 245312 | `a4b8ea25bc2f4b609a586e297386cdf441b67f797e1298fe7f771ef3cbd455f5` | `0x10000–0x4bfff` |
+| c6-standard | 972416 | `11ca28197d34723d44da45de2aff5f76e79c90edd2d337f2d97462af32404acb` | `0x10000–0xfdfff` |
+| c6-dev | 967504 | `23d80357563bd9bbc7fb9379bad6c12fb2e927e489274eb01c0c6a1f06ae2914` | `0x10000–0xfcfff` |

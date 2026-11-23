@@ -23,7 +23,7 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Registrare sul banco S3↔C6 l'handshake autenticato, gli ACK, il canale effettivo, RSSI, perdite, retry e recupero. Usare i contatori DRA1 e una fixture approvata per i casi negativi mirati.
 - Chiudere M1 solo con evidenza fisica e criteri sicurezza verificati. **PR #2 rimane draft e non va mergiata automaticamente.**
 
-**M1d configurazione PMK standard — implementazione e convalida offline.**
+**M1d configurazione PMK standard — PASS offline, collaudo fisico in attesa di autorizzazione.**
 
 - DRC2 con PMK casuale per dominio e LMK/HMAC per coppia. Lettura DRC1 compatibile con il banco senza scrivere NVS. Priorità DRC2 senza downgrade su errori.
 - Primo collaudo autorizzato del percorso standard con DRC1 esistente e immagini senza DEV/fixture. Colloquio DRC2 dopo provisioning coordinato, cattura CCMP indipendente e ripristino effettivo da ROM ancora da verificare.
