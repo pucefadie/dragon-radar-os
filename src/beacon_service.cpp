@@ -120,6 +120,22 @@ uint8_t beaconServiceChannel() {
   uint8_t channel=0; wifi_second_chan_t secondary=WIFI_SECOND_CHAN_NONE;
   return esp_wifi_get_channel(&channel,&secondary)==ESP_OK ? channel : 0;
 }
+#if M1C_BENCH_FIXTURE
+bool beaconServiceFixtureCommand(const char *command, Stream &out) {
+  M1cRadioAction action=M1cRadioAction::None;
+  if (!strcmp(command,"fixture-status")) {
+    secure.printBench(out);
+    return true;
+  }
+  if (!strcmp(command,"fixture-drop-ack")) action=M1cRadioAction::DropAck;
+  else if (!strcmp(command,"fixture-corrupt")) action=M1cRadioAction::CorruptProbe;
+  else if (!strcmp(command,"fixture-capture")) action=M1cRadioAction::CaptureProbe;
+  else if (!strcmp(command,"fixture-replay")) action=M1cRadioAction::Replay;
+  else return false;
+  out.println(secure.benchAction(action,millis())?"M1C_FIXTURE_OK":"M1C_FIXTURE_REJECTED");
+  return true;
+}
+#endif
 uint8_t beaconServiceFreshCount() {
   uint8_t count=0; const uint32_t now=millis();
   for (unsigned i=0;i<7;++i) if (BeaconRegistry::fresh(*registry.entry(i),now)) ++count;

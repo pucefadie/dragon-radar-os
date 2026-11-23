@@ -52,6 +52,12 @@ python3 tests/make_radio_records_test.py
 
 Il test DRA1 richiede le intestazioni di sviluppo OpenSSL per verificare lo stesso HMAC-SHA-256 usato dal firmware.
 
+Per verificare anche le azioni della fixture opzionale M1c sullo stesso codice:
+
+```bash
+g++ -std=c++11 -Wall -Wextra -Werror -DM1C_BENCH_MODE=1 -DM1C_BENCH_FIXTURE=1 -Iinclude tests/secure_radio_test.cpp src/secure_radio.cpp src/radio_link.cpp -lcrypto -o /tmp/secure_radio_fixture_test && /tmp/secure_radio_fixture_test
+```
+
 ## Privacy e stato
 
 Non sono inclusi log diagnostici, dump/backup flash, credenziali, identificatori hardware individuali o impostazioni di porta seriale personali. Non inserire chiavi Wi-Fi, password, token o LMK nei sorgenti. Consultare [PROTOCOL_AND_POWER.md](PROTOCOL_AND_POWER.md) e [RESUME.md](RESUME.md) prima di ogni prova radio. Nessun firmware viene flashato automaticamente dai comandi di build.

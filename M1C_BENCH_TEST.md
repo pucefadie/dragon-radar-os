@@ -70,7 +70,17 @@ La callback ESP-NOW accoda i frame. Il loop applicativo esegue la ricezione DRA1
 | ACK perso e retry | Fixture dedicata che sopprime il primo ACK applicativo mantenendo attiva la sessione | Rinvio dello stesso probe dopo circa 450 ms, ACK finale, una sola accettazione sul C6. |
 | Tag errato, duplicato e replay | Fixture autorizzata che invia tramite il proprio peer cifrato un tag DRA1 alterato, poi un duplicato della sessione e una richiesta vecchia dopo nuovo handshake | Nessuna conferma o refresh per tag errato o richiesta vecchia. Il duplicato corrente può ricevere l'ACK già prodotto, senza incrementare le accettazioni né rinnovare la sessione. |
 
-I test host verificano ACK perso, tag errato e un probe autenticato appartenente a una sessione precedente. Sul banco la soppressione di un ACK e l'invio controllato dei frame negativi richiedono ancora una fixture dedicata e approvata. La verifica indipendente di CCMP richiede una cattura radio. Tenere chiavi, nonce e frame completi fuori dai log. Acquisire un campione valido prima di ogni prova negativa. Se non compare Paired dopo 30 s sullo stesso canale, conservare il log e stop. Ripetere la prova dopo aver identificato la causa.
+### Fixture opzionale sul radar
+
+Compilare una variante separata con `M1C_BENCH_FIXTURE=1 ./scripts/build_m1c_bench.sh NUOVA_DIRECTORY`. Con la toolchain Xtensa nel PATH, verificare l'immagine con `python3 scripts/audit_m1c_bench.py NUOVA_DIRECTORY/artifacts/dragon_m1c_bench.ino.bin NUOVA_DIRECTORY/artifacts/dragon_m1c_bench.ino.elf --fixture`. Verificare il relativo SHA-256 prima dell'eventuale installazione approvata in OTA1. La sfera resta sulla build standard DRA1 `no_ota`. La fixture esclude gli attuatori e i comandi sono accessibili soltanto dalla console locale del radar. È esclusa dalle immagini standard, DEV, banco ordinario e provisioning. Le azioni sono singole e richiedono un link Paired sul canale configurato.
+
+1. Acquisire `beacons` e `fixture-status` sul radar e la riga `SECURE RADIO` sulla sfera. Verificare crescita di `confirmed` su entrambe le schede prima delle anomalie.
+2. Inviare `fixture-drop-ack`. La fixture scarta il prossimo ACK autenticato e correlato nel ricevitore radar, prima di consegnarlo al tracker. Verificare `ack_dropped` e `probe_retry_queued` sul radar, `duplicate_probe` sulla sfera e ripresa delle conferme. È una perdita al confine applicativo del radar.
+3. Inviare `fixture-corrupt`. Il primo invio del prossimo probe contiene un bit HMAC alterato. Il retry mantiene il frame originale firmato. Verificare `corrupt_queued` sul radar, `auth_rejected` sulla sfera e il successivo ACK valido.
+4. Inviare `fixture-capture` e attendere `captured=1` in `fixture-status`. Eseguire il passaggio controllato sul canale 1 fino a `Lost`, poi tornare al 6 e attendere un nuovo `Paired` su entrambi i dispositivi. Inviare `fixture-replay` e verificare `replay_queued` sul radar e `stale_session` sulla sfera. La fixture conserva il probe in RAM, verifica che la sessione corrente sia diversa e scarta la copia locale dopo l'accodamento.
+5. Annotare marcature temporali e differenze nei contatori. I probe ordinari continuano a partire ogni 3 s, perciò il totale `confirmed` può continuare a salire in parallelo. Il test host controlla l'assenza di una conferma o di un secondo aggiornamento per il singolo frame rifiutato.
+
+La verifica indipendente di CCMP richiede una cattura radio. Tenere chiavi, nonce e frame completi fuori dai log. Se non compare Paired dopo 30 s sullo stesso canale, conservare il log e fermare la prova.
 
 ## 5. Chiusura e rollback
 

@@ -69,6 +69,20 @@ class SecureEspNow final : private SecureRadioIo {
       (unsigned long)diagnostics.probe_retry_queued,(unsigned long)diagnostics.auth_rejected,
       (unsigned long)diagnostics.stale_session,(unsigned long)diagnostics.duplicate_probe);
   }
+#if M1C_BENCH_FIXTURE
+  bool benchAction(M1cRadioAction action,uint32_t now) {
+    uint8_t primary=0;
+    wifi_second_chan_t secondary{};
+    aligned_=esp_wifi_get_channel(&primary,&secondary)==ESP_OK && primary==channel_;
+    return radio_ && aligned_ && radio_->benchAction(action,now);
+  }
+  void printBench(Stream &out) const {
+    const M1cRadioResult result=radio_?radio_->benchResult():M1cRadioResult{};
+    out.printf("[M1C FIXTURE] ack_dropped=%lu corrupt_queued=%lu captured=%d replay_queued=%lu\n",
+      (unsigned long)result.ack_dropped,(unsigned long)result.corrupt_queued,
+      result.captured,(unsigned long)result.replay_queued);
+  }
+#endif
  private:
   struct Packet { uint8_t source[6],bytes[SECURE_RADIO_SIZE]; };
   static void erase(void *p,size_t n) {

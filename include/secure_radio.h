@@ -3,6 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
+#if M1C_BENCH_FIXTURE && (M1C_BENCH_MODE != 1 || M1C_BENCH_PROVISION || RADIO_DEV_INSECURE)
+#error "The DRA1 fixture requires the isolated, authenticated M1c radio build."
+#endif
+
 constexpr size_t SECURE_RADIO_SIZE = 80;
 constexpr size_t SECURE_CONFIG_SIZE = 76;
 
@@ -27,6 +31,17 @@ struct SecureRadioDiagnostics {
   uint32_t duplicate_probe = 0;
 };
 
+#if M1C_BENCH_FIXTURE
+enum class M1cRadioAction { None, DropAck, CorruptProbe, CaptureProbe, Replay };
+
+struct M1cRadioResult {
+  uint32_t ack_dropped = 0;
+  uint32_t corrupt_queued = 0;
+  uint32_t replay_queued = 0;
+  bool captured = false;
+};
+#endif
+
 class SecureRadio {
  public:
   SecureRadio(SecureRadioIo &io, bool controller, const SecureRadioConfig &config);
@@ -35,6 +50,10 @@ class SecureRadio {
   LinkState state(uint32_t now) const { return peers_.state(1, now); }
   uint32_t confirmations() const { return confirmations_; }
   const SecureRadioDiagnostics &diagnostics() const { return diagnostics_; }
+#if M1C_BENCH_FIXTURE
+  bool benchAction(M1cRadioAction action, uint32_t now);
+  const M1cRadioResult &benchResult() const { return benchResult_; }
+#endif
  private:
   enum class Kind : uint8_t { Hello=1, Challenge, Finish, Ready, Probe, Ack };
   struct Nonces { uint8_t a[16], b[16]; };
@@ -51,4 +70,10 @@ class SecureRadio {
   Nonces current_{}, pending_{};
   uint32_t started_=0, lastSend_=0, pendingAt_=0, nextProbe_=0, seq_=0, lastProbe_=0, confirmations_=0;
   bool attempting_=false, challenged_=false, pendingValid_=false, online_=false;
+#if M1C_BENCH_FIXTURE
+  bool benchSendProbe(uint8_t *frame, uint8_t length);
+  M1cRadioAction benchAction_ = M1cRadioAction::None;
+  M1cRadioResult benchResult_;
+  uint8_t benchCaptured_[SECURE_RADIO_SIZE]{};
+#endif
 };

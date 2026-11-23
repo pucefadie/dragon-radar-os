@@ -60,7 +60,44 @@ void SecureRadio::established(uint32_t now) {
   seq_=lastProbe_=0;
   ack_=RadioAckTracker{};
   nextProbe_=now;
+#if M1C_BENCH_FIXTURE
+  benchAction_=M1cRadioAction::None;
+#endif
 }
+#if M1C_BENCH_FIXTURE
+bool SecureRadio::benchAction(M1cRadioAction action, uint32_t now) {
+  if (!controller_ || state(now)!=LinkState::Paired || benchAction_!=M1cRadioAction::None) return false;
+  if (action==M1cRadioAction::Replay) {
+    if (!benchResult_.captured ||
+        (equal(benchCaptured_+16,current_.a,16) && equal(benchCaptured_+32,current_.b,16)) ||
+        !io_.send(config_.peer,benchCaptured_,sizeof(benchCaptured_))) return false;
+    benchResult_.captured=false;
+    std::memset(benchCaptured_,0,sizeof(benchCaptured_));
+    ++benchResult_.replay_queued;
+    return true;
+  }
+  if (action==M1cRadioAction::None) return false;
+  benchAction_=action;
+  return true;
+}
+
+bool SecureRadio::benchSendProbe(uint8_t *frame, uint8_t length) {
+  const bool initial=ack_.attempts()==1;
+  const bool corrupt=initial && benchAction_==M1cRadioAction::CorruptProbe;
+  if (corrupt) frame[SECURE_RADIO_SIZE-1]^=1; // The tracker still owns the signed original.
+  if (!io_.send(config_.peer,frame,length)) return false;
+  if (corrupt) {
+    ++benchResult_.corrupt_queued;
+    benchAction_=M1cRadioAction::None;
+  } else if (initial && benchAction_==M1cRadioAction::CaptureProbe) {
+    std::memcpy(benchCaptured_,frame,sizeof(benchCaptured_));
+    benchResult_.captured=true;
+    benchAction_=M1cRadioAction::None;
+  }
+  return true;
+}
+#endif
+
 void SecureRadio::tick(uint32_t now) {
   if (!controller_) return;
   if (online_ && peers_.state(1,now)!=LinkState::Paired) online_=false;
@@ -87,7 +124,13 @@ void SecureRadio::tick(uint32_t now) {
       ack_.begin(1,config_.peer,handle,seq_,frame,sizeof(frame),now);
     nextProbe_=now+intervalMs;
   }
-  if (ack_.due(now,frame,length) && io_.send(config_.peer,frame,length) && ack_.attempts()>1) {
+  if (!ack_.due(now,frame,length)) return;
+#if M1C_BENCH_FIXTURE
+  const bool queued=benchSendProbe(frame,length);
+#else
+  const bool queued=io_.send(config_.peer,frame,length);
+#endif
+  if (queued && ack_.attempts()>1) {
     ++diagnostics_.probe_retry_queued;
   }
 }
@@ -123,6 +166,13 @@ void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint
     } else if (kind==Kind::Ready && freshAttempt && challenged_ && current) {
       established(now);
     } else if (kind==Kind::Ack && online_ && current && peers_.state(1,now)==LinkState::Paired) {
+#if M1C_BENCH_FIXTURE
+      if (benchAction_==M1cRadioAction::DropAck && ack_.pending() && ack==seq_) {
+        ++benchResult_.ack_dropped;
+        benchAction_=M1cRadioAction::None;
+        return;
+      }
+#endif
       RadioFrame result{};
       result.type=RadioMessage::CommandAck; result.id=1; result.destination=0;
       result.session=handle; result.ack_sequence=ack;

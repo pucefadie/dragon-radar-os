@@ -31,6 +31,9 @@ bool setBenchChannel(uint8_t requested) {
 }
 
 void dispatch(const char *command) {
+#if M1C_BENCH_FIXTURE
+  if (beaconServiceFixtureCommand(command,Serial)) return;
+#endif
   if (!std::strcmp(command, "beacons")) {
     beaconServicePrint(Serial);
   } else if (!std::strcmp(command, "channel1") || !std::strcmp(command, "channel6")) {
@@ -43,6 +46,9 @@ void dispatch(const char *command) {
     }
   } else {
     Serial.println("M1C commands: beacons, channel1, channel6");
+#if M1C_BENCH_FIXTURE
+    Serial.println("M1C fixture: fixture-status, fixture-drop-ack, fixture-corrupt, fixture-capture, fixture-replay");
+#endif
   }
 }
 #endif
@@ -66,6 +72,9 @@ extern "C" void __wrap_initArduino() {
 void setup() {
   Serial.begin(115200);
   Serial.println("M1C_BENCH_MODE=1 ACTUATOR_CODE_EXCLUDED");
+#if M1C_BENCH_FIXTURE
+  Serial.println("M1C_BENCH_FIXTURE=1 DRA1_FAULT_TEST_ONLY");
+#endif
   Serial.printf("M1C GPIO16_LOW=%d NVS_INIT=%d\n", motorReady, int(nvsResult));
   if (!motorReady || nvsResult != ESP_OK) return;
 #if M1C_BENCH_PROVISION

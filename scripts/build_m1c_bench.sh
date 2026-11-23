@@ -3,8 +3,10 @@
 set -euo pipefail
 project="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${M1C_BENCH_PROVISION:=0}"
-if [[ $# != 1 || -e "$1" || ! "$M1C_BENCH_PROVISION" =~ ^[01]$ ]]; then
-  echo "Usage: M1C_BENCH_PROVISION=0|1 $0 NEW_OUTPUT_DIRECTORY" >&2
+: "${M1C_BENCH_FIXTURE:=0}"
+if [[ $# != 1 || -e "$1" || ! "$M1C_BENCH_PROVISION" =~ ^[01]$ ||
+      ! "$M1C_BENCH_FIXTURE" =~ ^[01]$ || "$M1C_BENCH_PROVISION$M1C_BENCH_FIXTURE" == 11 ]]; then
+  echo "Usage: M1C_BENCH_PROVISION=0|1 M1C_BENCH_FIXTURE=0|1 $0 NEW_OUTPUT_DIRECTORY (mutually exclusive)" >&2
   exit 2
 fi
 mkdir -p "$1"
@@ -16,6 +18,6 @@ cp "$project/include/"{hw_config,beacon_service,beacon_protocol,beacon_registry,
 cp "$project/src/"{beacon_service,beacon_protocol,beacon_registry,secure_radio,radio_link}.cpp "$stage/"
 "${ARDUINO_CLI:-arduino-cli}" compile \
   --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB' \
-  --build-property "compiler.cpp.extra_flags=-DM1C_BENCH_MODE=1 -DRADIO_DEV_INSECURE=0 -DM1C_BENCH_PROVISION=$M1C_BENCH_PROVISION" \
+  --build-property "compiler.cpp.extra_flags=-DM1C_BENCH_MODE=1 -DRADIO_DEV_INSECURE=0 -DM1C_BENCH_PROVISION=$M1C_BENCH_PROVISION -DM1C_BENCH_FIXTURE=$M1C_BENCH_FIXTURE" \
   --build-property 'compiler.c.elf.extra_flags=-Wl,--wrap=initArduino' \
   --jobs 4 --build-path "$out/cache" --output-dir "$out/artifacts" "$stage"

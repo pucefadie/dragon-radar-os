@@ -44,7 +44,82 @@ static SecureRadioConfig make(uint8_t peer) {
   return cfg;
 }
 
+#if M1C_BENCH_FIXTURE
+static void testBenchFixture() {
+  const uint8_t radarMac[6]{2}, sphereMac[6]{4};
+  Wire radarWire(20), sphereWire(50);
+  SecureRadio radar(radarWire,true,make(4)), sphere(sphereWire,false,make(2));
+  auto toSphere=[&](const Frame &frame,uint32_t now) {
+    sphere.receive(radarMac,frame.data(),frame.size(),now);
+  };
+  auto toRadar=[&](const Frame &frame,uint32_t now) {
+    radar.receive(sphereMac,frame.data(),frame.size(),now);
+  };
+  auto handshake=[&](uint32_t start) {
+    radar.tick(start);
+    toSphere(radarWire.take(),start+1);
+    toRadar(sphereWire.take(),start+2);
+    radar.tick(start+2);
+    toSphere(radarWire.take(),start+3);
+    toRadar(sphereWire.take(),start+4);
+    assert(radar.state(start+4)==LinkState::Paired && sphere.state(start+4)==LinkState::Paired);
+  };
+  assert(!radar.benchAction(M1cRadioAction::DropAck,0));
+  handshake(0);
+  assert(!sphere.benchAction(M1cRadioAction::DropAck,4));
+  assert(radar.benchAction(M1cRadioAction::DropAck,4));
+  assert(!radar.benchAction(M1cRadioAction::CaptureProbe,4));
+  radar.tick(4);
+  const Frame first=radarWire.take();
+  toSphere(first,5);
+  Frame signedAck=sphereWire.take(), badAck=signedAck;
+  badAck.back()^=1;
+  toRadar(badAck,6);
+  assert(radar.benchResult().ack_dropped==0 && radar.diagnostics().auth_rejected==1);
+  toRadar(signedAck,7);
+  assert(radar.benchResult().ack_dropped==1 && radar.confirmations()==0);
+  radar.tick(454);
+  assert(radarWire.take()==first);
+  toSphere(first,455);
+  toRadar(sphereWire.take(),456);
+  assert(radar.confirmations()==1 && sphere.confirmations()==1);
+  assert(radar.benchResult().ack_dropped==1 && sphere.diagnostics().duplicate_probe==1);
+
+  assert(radar.benchAction(M1cRadioAction::CorruptProbe,3004));
+  radar.tick(3004);
+  Frame badProbe=radarWire.take();
+  toSphere(badProbe,3005);
+  assert(radar.benchResult().corrupt_queued==1 && sphere.diagnostics().auth_rejected==1);
+  assert(sphere.confirmations()==1 && sphereWire.queue.empty());
+  radar.tick(3454);
+  const Frame goodProbe=radarWire.take();
+  badProbe.back()^=1;
+  assert(badProbe==goodProbe);
+  toSphere(goodProbe,3455);
+  toRadar(sphereWire.take(),3456);
+  assert(radar.confirmations()==2 && sphere.confirmations()==2);
+
+  assert(radar.benchAction(M1cRadioAction::CaptureProbe,6004));
+  radar.tick(6004);
+  const Frame saved=radarWire.take();
+  assert(radar.benchResult().captured);
+  assert(!radar.benchAction(M1cRadioAction::Replay,6004));
+  toSphere(saved,6005);
+  toRadar(sphereWire.take(),6006);
+  handshake(24000);
+  assert(radar.benchAction(M1cRadioAction::Replay,24004));
+  const Frame replay=radarWire.take();
+  assert(replay==saved && !radar.benchResult().captured && radar.benchResult().replay_queued==1);
+  toSphere(replay,24005);
+  assert(sphere.confirmations()==3 && sphere.diagnostics().stale_session==1 && sphereWire.queue.empty());
+  assert(!radar.benchAction(M1cRadioAction::Replay,24005));
+}
+#endif
+
 int main() {
+#if M1C_BENCH_FIXTURE
+  testBenchFixture();
+#endif
   const uint8_t radarMac[6]{2}, sphereMac[6]{4}, wrongMac[6]{6};
   Wire radarWire(20), sphereWire(50);
   auto rc=make(4), sc=make(2);

@@ -9,7 +9,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("image", type=Path)
 parser.add_argument("elf", type=Path)
 parser.add_argument("--xtensa-prefix", default="xtensa-esp32s3-elf-")
-parser.add_argument("--provision", action="store_true")
+variant = parser.add_mutually_exclusive_group()
+variant.add_argument("--provision", action="store_true")
+variant.add_argument("--fixture", action="store_true")
 args = parser.parse_args()
 
 
@@ -30,6 +32,9 @@ require((b"M1C_BENCH_PROVISION=1 USB_ONLY" in image) == args.provision,
 require((b"RADIO_PROVISION_OK" in image) == args.provision,
         "unexpected provisioning receiver presence")
 require((b"[SECURE RADIO]" in image) != args.provision, "secure radio in wrong variant")
+require((b"M1C_BENCH_FIXTURE=1 DRA1_FAULT_TEST_ONLY" in image) == args.fixture,
+        "fixture build marker does not match")
+require((b"fixture-drop-ack" in image) == args.fixture, "fixture command in wrong variant")
 require(b"[DEV INSECURE]" not in image, "DEV transport embedded")
 
 symbols = tool("nm", "-C", "--defined-only")
