@@ -272,3 +272,9 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS enumerazione USB** COM12 presente. Porta rilevata tramite inventario del sistema, senza aprire la seriale. Identità del chip e modalità ROM da verificare dopo il controllo elettrico.
 - **PENDING misura operatore** confermare alimentazione solo USB con batteria e RGB scollegati, cablaggio Grove D4/GPIO22 → giallo, 3V3 → rosso, GND → nero e bianco isolato. Controllare assenza di corto 3V3–GND a scheda spenta e misurare D4 rispetto a GND in inattività e in ROM. Il risultato deve essere LOW.
 - **NOT RUN** identificazione ROM, doppio backup live, flash e readback. Restano da collaudare l'impulso intenzionale di avvio da 60 ms, il comando USB, il cooldown, il LED USER e DRA1 con il motore in funzione. Nessun reset o scrittura.
+
+### M3a — preflight interrotto per vibrazione inattesa
+
+- **PASS** dopo la conferma elettrica dell'operatore, COM12 identificata come XIAO ESP32-C6 in ROM. Flash da 4 MiB. Il primo dump corrente contiene ancora l'app C6 con LED USER del collaudo precedente.
+- **STOP** l'operatore ha segnalato vibrazione mentre era in corso la lettura flash con stub in RAM, prima della fase di scrittura. Interrotto il processo. Conservati un dump completo da 4 MiB e una seconda lettura parziale da 3.670.016 byte. Tutti i byte della seconda lettura coincidono con la prima, ma manca il secondo backup integrale.
+- **NOT RUN** flash, readback e avvio M3a. L'impulso di avvio da 60 ms del candidato non può spiegare l'evento perché M3a non è stato installato. Nessuna scrittura o ripristino eseguito. Lasciare il C6 senza alimentazione fino a quando l'operatore conferma durata e fase della vibrazione e viene individuato il prossimo controllo elettrico. Log e dump conservati in locale.
