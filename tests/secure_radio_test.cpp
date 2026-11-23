@@ -56,6 +56,7 @@ int main() {
   toSphere(forged,0);
   sphere.receive(wrongMac,hello.data(),hello.size(),0);
   assert(sphereWire.queue.empty());
+  assert(sphere.diagnostics().auth_rejected==1);
   toSphere(hello,1);
   Frame challenge=sphereWire.take();
   toRadar(challenge,2);
@@ -77,15 +78,23 @@ int main() {
   toSphere(probe,455);
   Frame ack=sphereWire.take();
   assert(sphere.confirmations()==1);
+  assert(radar.diagnostics().probe_retry_queued==0);
+  assert(sphere.diagnostics().duplicate_probe==0);
   radar.tick(904);
   assert(radarWire.take()==probe);
   toSphere(probe,905);
   assert(sphereWire.take()==ack && sphere.confirmations()==1);
+  assert(radar.diagnostics().probe_retry_queued==1);
+  assert(sphere.diagnostics().duplicate_probe==1);
   forged=ack; forged[12]^=1;
   toRadar(forged,906);
   assert(radar.confirmations()==0);
+  assert(radar.diagnostics().auth_rejected==0); // Malformed ACK is rejected before HMAC.
+  forged=ack; forged[79]^=1;
+  toRadar(forged,906);
   radar.receive(wrongMac,ack.data(),ack.size(),906);
   assert(radar.confirmations()==0);
+  assert(radar.diagnostics().auth_rejected==1);
   toRadar(ack,907);
   toRadar(ack,908);
   assert(radar.confirmations()==1);
@@ -112,4 +121,34 @@ int main() {
   assert(radar.state(16006)==LinkState::Paired);
   toRadar(ack,16006);
   assert(radar.confirmations()==1);
+  assert(radar.diagnostics().stale_session==1);
+  rebooted.receive(radarMac,probe.data(),probe.size(),16007);
+  assert(rebooted.diagnostics().stale_session==1);
+  assert(rebooted.confirmations()==0 && rebootWire.queue.empty());
+
+  // Restart the radar while the sphere is still paired, then exchange a new probe.
+  Wire restartedRadarWire(110);
+  SecureRadio restartedRadar(restartedRadarWire,true,rc);
+  restartedRadar.tick(16010);
+  Frame restartHello=restartedRadarWire.take();
+  rebooted.receive(radarMac,restartHello.data(),restartHello.size(),16011);
+  Frame restartChallenge=rebootWire.take();
+  restartedRadar.receive(sphereMac,restartChallenge.data(),restartChallenge.size(),16012);
+  restartedRadar.tick(16012);
+  Frame restartFinish=restartedRadarWire.take();
+  rebooted.receive(radarMac,restartFinish.data(),restartFinish.size(),16013);
+  Frame restartReady=rebootWire.take();
+  restartedRadar.receive(sphereMac,restartReady.data(),restartReady.size(),16014);
+  assert(restartedRadar.state(16014)==LinkState::Paired);
+  restartedRadar.tick(16014);
+  Frame restartProbe=restartedRadarWire.take();
+  rebooted.receive(radarMac,restartProbe.data(),restartProbe.size(),16015);
+  Frame restartAck=rebootWire.take();
+  restartedRadar.receive(sphereMac,restartAck.data(),restartAck.size(),16016);
+  assert(rebooted.confirmations()==1 && restartedRadar.confirmations()==1);
+
+  // Repeating the last probe may recover a lost ACK but cannot extend freshness.
+  rebooted.receive(radarMac,restartProbe.data(),restartProbe.size(),31000);
+  assert(rebootWire.take()==restartAck && rebooted.confirmations()==1);
+  assert(rebooted.state(31016)==LinkState::Lost);
 }

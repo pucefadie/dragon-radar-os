@@ -87,7 +87,9 @@ void SecureRadio::tick(uint32_t now) {
       ack_.begin(1,config_.peer,handle,seq_,frame,sizeof(frame),now);
     nextProbe_=now+intervalMs;
   }
-  if (ack_.due(now,frame,length)) io_.send(config_.peer,frame,length);
+  if (ack_.due(now,frame,length) && io_.send(config_.peer,frame,length) && ack_.attempts()>1) {
+    ++diagnostics_.probe_retry_queued;
+  }
 }
 void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint32_t now) {
   if (!source || !b || len!=SECURE_RADIO_SIZE || !equal(source,config_.peer,6) ||
@@ -99,8 +101,16 @@ void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint
   if (!nonzero(nonce.a,16) || (nonzero(nonce.b,16)==(kind==Kind::Hello))) return;
   if (kind==Kind::Probe ? (!seq || ack) : kind==Kind::Ack ? (seq || !ack) : (seq || ack)) return;
   uint8_t tag[32];
-  if (!io_.sign(config_.auth,b,48,tag) || !equal(tag,b+48,sizeof(tag))) return;
+  if (!io_.sign(config_.auth,b,48,tag)) return;
+  if (!equal(tag,b+48,sizeof(tag))) {
+    ++diagnostics_.auth_rejected;
+    return;
+  }
   const bool current=equal(nonce.a,current_.a,16) && equal(nonce.b,current_.b,16);
+  if (!current && online_ && (controller_ ? kind==Kind::Ack : kind==Kind::Probe)) {
+    ++diagnostics_.stale_session;
+    return;
+  }
   if (controller_) {
     const bool freshAttempt=attempting_ && now-started_<handshakeMs;
     if (kind==Kind::Challenge && freshAttempt && equal(nonce.a,current_.a,16)) {
@@ -147,6 +157,8 @@ void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint
       lastProbe_=seq;
       peers_.markAuthenticatedRx(1,source,handle,now,true);
       ++confirmations_;
+    } else if (seq==lastProbe_) {
+      ++diagnostics_.duplicate_probe;
     }
     // Retransmit exactly the last diagnostic acknowledgment; never refresh on duplicate.
     if (seq==lastProbe_) emit(Kind::Ack,current_,0,seq);

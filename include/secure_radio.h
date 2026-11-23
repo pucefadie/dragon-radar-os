@@ -20,6 +20,13 @@ class SecureRadioIo {
   virtual bool send(const uint8_t *mac, const uint8_t *bytes, size_t length) = 0;
 };
 
+struct SecureRadioDiagnostics {
+  uint32_t probe_retry_queued = 0;
+  uint32_t auth_rejected = 0;
+  uint32_t stale_session = 0;
+  uint32_t duplicate_probe = 0;
+};
+
 class SecureRadio {
  public:
   SecureRadio(SecureRadioIo &io, bool controller, const SecureRadioConfig &config);
@@ -27,6 +34,7 @@ class SecureRadio {
   void receive(const uint8_t *source, const uint8_t *bytes, size_t length, uint32_t now);
   LinkState state(uint32_t now) const { return peers_.state(1, now); }
   uint32_t confirmations() const { return confirmations_; }
+  const SecureRadioDiagnostics &diagnostics() const { return diagnostics_; }
  private:
   enum class Kind : uint8_t { Hello=1, Challenge, Finish, Ready, Probe, Ack };
   struct Nonces { uint8_t a[16], b[16]; };
@@ -39,6 +47,7 @@ class SecureRadio {
   PairingRegistry peers_;
   ReplayWindow replay_;
   RadioAckTracker ack_;
+  SecureRadioDiagnostics diagnostics_;
   Nonces current_{}, pending_{};
   uint32_t started_=0, lastSend_=0, pendingAt_=0, nextProbe_=0, seq_=0, lastProbe_=0, confirmations_=0;
   bool attempting_=false, challenged_=false, pendingValid_=false, online_=false;

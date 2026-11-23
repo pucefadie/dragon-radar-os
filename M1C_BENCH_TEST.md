@@ -56,6 +56,8 @@ Il percorso deve essere nuovo. Il generatore crea `radar.bin` e `sphere.bin` da 
 
 Osservare contemporaneamente entrambi i terminali con timestamp. `state=2` attende una sessione autenticata, `3` indica Paired, `4` Lost. `confirmed` è un contatore locale: sul radar cresce all'ACK applicativo accettato, sul C6 alla prima accettazione di un probe. L'esito TX del driver e i beacon DRB2 non provano l'autenticazione DRA1.
 
+Le immagini con i contatori DRA1 mostrano anche `probe_retry_queued` sul radar e `duplicate_probe` sulla sfera. Il primo conta i retry accettati nella coda locale, il secondo le ripetizioni dell'ultimo probe ricevute con HMAC valido nella sessione corrente. `auth_rejected` conta i tag errati dopo i controlli di formato e indirizzo. `stale_session` conta ACK o probe con HMAC valido e nonce diversi da quelli della sessione aperta. Per ogni prova annotare le differenze fra due letture, insieme a `confirmed`.
+
 | Caso | Azione futura | Criterio |
 |---|---|---|
 | Handshake, canale e ACK | Tenere le schede a 1–2 m, canale effettivo 6, acquisire almeno 60 s | `configured=1 aligned=1 state=3` su entrambi; cresce `confirmed` su entrambi; registrare drop e `tx_stalled`. |
@@ -66,7 +68,7 @@ Osservare contemporaneamente entrambi i terminali con timestamp. `state=2` atten
 | ACK perso e retry | Fixture dedicata che sopprime il primo ACK applicativo mantenendo attiva la sessione | Rinvio dello stesso probe dopo circa 450 ms, ACK finale, una sola accettazione sul C6. |
 | Tag errato, duplicato e replay | Fixture autorizzata che invia tramite il proprio peer cifrato un tag DRA1 alterato, poi un duplicato della sessione e una richiesta vecchia dopo nuovo handshake | Nessuna conferma o refresh per tag errato o richiesta vecchia. Il duplicato corrente può ricevere l'ACK già prodotto, senza incrementare le accettazioni né rinnovare la sessione. |
 
-I candidati radio non espongono soppressione ACK, replay controllato, nonce, conteggio retry o attestazione indipendente del bit CCMP. I tre casi negativi sono verificabili su host; **il collaudo fisico mirato di autenticazione negativa, retry e replay resta NOT RUN finché non viene preparata e approvata una fixture di banco con questi punti di controllo**. Per la fixture futura usare fault deterministici di un solo evento sul dispositivo autorizzato, fra parsing e consegna applicativa. Tenere chiavi, nonce e frame completi fuori dai log. Esporre solo tipo prova, numero tentativo, esito accettato/rifiutato e incremento conferme. Acquisire il corrispondente campione valido prima di ogni prova negativa. Non dedurre tale copertura da reset, beacon o contatori aggregati. Se non compare Paired dopo 30 s sullo stesso canale, conservare il log e stop. Ripetere la prova solo dopo aver identificato la causa.
+I test host verificano ACK perso, tag errato e un probe autenticato appartenente a una sessione precedente. Sul banco la soppressione di un ACK e l'invio controllato dei frame negativi richiedono ancora una fixture dedicata e approvata. La verifica indipendente di CCMP richiede una cattura radio. Tenere chiavi, nonce e frame completi fuori dai log. Acquisire un campione valido prima di ogni prova negativa. Se non compare Paired dopo 30 s sullo stesso canale, conservare il log e stop. Ripetere la prova dopo aver identificato la causa.
 
 ## 5. Chiusura e rollback
 

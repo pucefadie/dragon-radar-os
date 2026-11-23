@@ -12,15 +12,15 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Coda TX, callback e timeout driver verificati su mock; build S3/C6 default e DEV riportate PASS nell'attuale PR #2.
 - Restano possibili falsi positivi: test host e build NON costituiscono test ESP-NOW reale.
 
-**M1b sicurezza e persistenza — prossimo blocco autonomo di coding.**
+**M1b sicurezza e persistenza — implementata, verifiche software in mantenimento.**
 - Integrare senza regressioni `PairingRegistry`, `ReplayWindow`, `RadioAckTracker` con trasporto vero, con handshake esplicito autenticato e separazione completa DEV vs produzione.
 - NVS per associazione ID↔MAC, stato canale e parametri indispensabili; piano provisioning LMK e ESP-NOW unicast cifrato. Evitare segreti nel repository e handshake fittizi.
 - Gestione dei casi: peer errato, MAC/sessione/ID non corrispondenti, replay, ACK persi/tardivi, riavvio, scadenza peer, canale bloccato da AP, disconnessione.
 - Per ogni modifica: unit test host e build S3/C6, default e DEV; controllo che DEV non sia attivo nei binari default.
 
-**M1c collaudo fisico — BLOCCATO FINO A VIA LIBERA.**
+**M1c preflight e collaudo fisico — IN CORSO.**
 - Seguire `FIRST_RADIO_TEST.md` verificando prima la procedura corrente; identificare schede/porte/antenna/partizioni e predisporre piano di rollback. Non eseguire flash senza consenso esplicito.
-- Registrare prove reali S3↔C6, canale, RSSI, pacchetti bidirezionali, perdite, retry, tempi, recovery; poi pairing sicuro e comunicazione cifrata.
+- Registrare sul banco S3↔C6 l'handshake autenticato, gli ACK, il canale effettivo, RSSI, perdite, retry e recupero. Usare i contatori DRA1 e una fixture approvata per i casi negativi mirati.
 - Chiudere M1 solo con evidenza fisica e criteri sicurezza verificati. **PR #2 rimane draft e non va mergiata automaticamente.**
 
 ## M2 — Esperienza radar (successiva a M1)

@@ -61,9 +61,13 @@ class SecureEspNow final : private SecureRadioIo {
     if (aligned_) radio_->tick(now);
   }
   void print(Stream &out,uint32_t now) const {
-    out.printf("[SECURE RADIO] configured=%d aligned=%d state=%u confirmed=%lu rx_drop=%lu tx_stalled=%d\n",
+    const SecureRadioDiagnostics diagnostics=radio_?radio_->diagnostics():SecureRadioDiagnostics{};
+    out.printf("[SECURE RADIO] configured=%d aligned=%d state=%u confirmed=%lu rx_drop=%lu tx_stalled=%d"
+      " probe_retry_queued=%lu auth_rejected=%lu stale_session=%lu duplicate_probe=%lu\n",
       radio_!=nullptr,aligned_,radio_?unsigned(radio_->state(now)):0,
-      radio_?(unsigned long)radio_->confirmations():0,(unsigned long)drop_.load(),tx_.stalled());
+      radio_?(unsigned long)radio_->confirmations():0,(unsigned long)drop_.load(),tx_.stalled(),
+      (unsigned long)diagnostics.probe_retry_queued,(unsigned long)diagnostics.auth_rejected,
+      (unsigned long)diagnostics.stale_session,(unsigned long)diagnostics.duplicate_probe);
   }
  private:
   struct Packet { uint8_t source[6],bytes[SECURE_RADIO_SIZE]; };
