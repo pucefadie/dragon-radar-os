@@ -1,6 +1,6 @@
 // Experimental Dragon Radar beacon. Broadcast frames are NOT authenticated.
 // Configure a unique ID (1..7) and the radar's current Wi-Fi channel.
-// No pins, battery divider, sleep or ranging hardware assumed.
+// The XIAO profile uses the onboard USER LED and RF switch.
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_now.h>
@@ -17,6 +17,14 @@
 #include <freertos/queue.h>
 #ifndef RADIO_DEV_INSECURE
 #define RADIO_DEV_INSECURE 0
+#endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
+#include <driver/gpio.h>
+#include "dra1_user_led.h"
+static_assert(LED_BUILTIN == 15 && LED_BUILTIN != WIFI_ENABLE && LED_BUILTIN != WIFI_ANT_CONFIG,
+              "XIAO C6 USER LED pin does not match board profile");
+static constexpr gpio_num_t kUserLedPin = GPIO_NUM_15;
+static Dra1UserLed userLed;
 #endif
 #ifndef DRAGON_BALL_ID
 #define DRAGON_BALL_ID 1
@@ -52,6 +60,14 @@ static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
 static uint32_t bootId=0, sequence=0, nextBeacon=0;
 void setup() {
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
+  // Preload the inactive level before enabling the active-low output.
+  gpio_set_level(kUserLedPin, HIGH);
+  pinMode(kUserLedPin, OUTPUT);
+  gpio_sleep_set_direction(kUserLedPin, GPIO_MODE_INPUT);
+  gpio_sleep_set_pull_mode(kUserLedPin, GPIO_PULLUP_ONLY);
+  gpio_sleep_sel_en(kUserLedPin);
+#endif
   Serial.begin(115200);
 #if defined(ARDUINO_XIAO_ESP32C6)
   // Seeed XIAO ESP32-C6: enable RF switch, then select external U.FL antenna.
@@ -93,7 +109,12 @@ void loop() {
   while (budget-- && xQueueReceive(devQueue,&packet,0)==pdTRUE) { RadioFrame f{};if(radioDecode(packet.bytes,sizeof(packet.bytes),f)) Serial.printf("[DEV INSECURE] RX type=%s id=%u seq=%lu RSSI=%d channel=%d\n",devMessageName(f.type),f.id,(unsigned long)f.sequence,packet.rssi,DRAGON_RADIO_CHANNEL);devSphere->receive(packet.mac,packet.bytes,sizeof(packet.bytes),millis()); }
   if (devSphere->online()!=lastOnline) {lastOnline=devSphere->online(); Serial.printf("[DEV INSECURE] %s channel=%d\n",lastOnline?"LINK_RECOVERED":"LINK_LOST",DRAGON_RADIO_CHANNEL);}
 #else
-  secure.tick(millis());
+  const uint32_t now = millis();
+  secure.tick(now);
+#if defined(ARDUINO_XIAO_ESP32C6)
+  if (userLed.update(secure.linkStatus(now), now))
+    gpio_set_level(kUserLedPin, userLed.lit() ? LOW : HIGH);
+#endif
   static uint32_t lastStatus=0;
   if (uint32_t(millis()-lastStatus)>=5000) { lastStatus=millis(); secure.print(Serial,lastStatus); }
 #endif
