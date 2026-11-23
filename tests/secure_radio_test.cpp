@@ -10,6 +10,7 @@ using Frame = std::array<uint8_t,SECURE_RADIO_SIZE>;
 struct Wire : SecureRadioIo {
   std::deque<Frame> queue;
   uint8_t counter;
+  bool accepting = true;
   explicit Wire(uint8_t seed):counter(seed) {}
   bool sign(const uint8_t *key,const uint8_t *bytes,size_t length,uint8_t *tag) override {
     unsigned size=0;
@@ -21,6 +22,7 @@ struct Wire : SecureRadioIo {
   }
   bool send(const uint8_t *,const uint8_t *b,size_t n) override {
     assert(n==SECURE_RADIO_SIZE);
+    if (!accepting) return false;
     Frame f; memcpy(f.data(),b,n); queue.push_back(f);
     return true;
   }
@@ -144,7 +146,18 @@ int main() {
   Frame restartProbe=restartedRadarWire.take();
   rebooted.receive(radarMac,restartProbe.data(),restartProbe.size(),16015);
   Frame restartAck=rebootWire.take();
-  restartedRadar.receive(sphereMac,restartAck.data(),restartAck.size(),16016);
+  // A full local TX queue consumes an attempt without inflating the queued count.
+  restartedRadarWire.accepting=false;
+  restartedRadar.tick(16464);
+  assert(restartedRadarWire.queue.empty());
+  assert(restartedRadar.diagnostics().probe_retry_queued==0);
+  restartedRadarWire.accepting=true;
+  restartedRadar.tick(16914);
+  assert(restartedRadarWire.take()==restartProbe);
+  assert(restartedRadar.diagnostics().probe_retry_queued==1);
+  rebooted.receive(radarMac,restartProbe.data(),restartProbe.size(),16915);
+  assert(rebootWire.take()==restartAck);
+  restartedRadar.receive(sphereMac,restartAck.data(),restartAck.size(),16916);
   assert(rebooted.confirmations()==1 && restartedRadar.confirmations()==1);
 
   // Repeating the last probe may recover a lost ACK but cannot extend freshness.

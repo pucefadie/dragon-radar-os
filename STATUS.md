@@ -1,6 +1,6 @@
 # Dragon Radar OS — stato M1
 
-**Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1b:** `a43bfe7` · **Baseline piano M1c:** `bbfd0ae` · **PR #2:** draft. Il checkpoint corrente verifica i rilievi della [revisione AI #3 sul preflight](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-6991603548).
+**Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1b:** `a43bfe7` · **Baseline piano M1c:** `bbfd0ae` · **PR #2:** draft. Il checkpoint corrente verifica i rilievi della [revisione AI #3 sui contatori DRA1](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-7099450458).
 
 | Stato | Evidenza |
 |---|---|
@@ -8,7 +8,7 @@
 | **PASS — preparazione M1c** | Rieseguiti otto test C++ e il test del generatore con record sintetici. Verificati hash dei sei binari M1b, coppie dei backup integrali S3/C6, layout e fit delle immagini app per il banco. Bootstrap S3 storico con rollback attivo. Build C6 standard e provisioning `no_ota` riuscite e corrispondenti alla tabella C6 archiviata. |
 | **FAIL — profilo C6 M1b rispetto alla scheda** | Le immagini C6 M1b erano valide per il proprio profilo a due slot, ma quella tabella non corrisponde a quella archiviata per il C6 fisico. Usare solo i nuovi candidati app C6 `no_ota`, previa verifica corrente. |
 | **PASS storico — DRB2 fisico, solo ricezione** | Ricevitore S3 minimale: 10 beacon validi confermati sul canale 6, senza errori CRC nei report completi, NVS immutata. Al termine OTA1 selezionato con sequenza 4 VALID, OTA0 integro. Non è una prova DRA1. |
-| **NOT RUN — collaudo M1c fisico** | Il preflight C6 è avanzato fino alle doppie letture integrali riportate qui sotto. Sul radar resta aperto l'ingresso ROM. Provisioning, DRA1, ACK, replay, perdita e recupero non sono stati provati sulle schede. I casi negativi fisici richiedono ancora una fixture dedicata. |
+| **NOT RUN — collaudo M1c fisico** | Il C6 ha due backup integrali e il radar ha risposto in ROM. Provisioning, DRA1, ACK, replay, perdita e recupero non sono stati provati sulle schede. I casi negativi fisici richiedono ancora una fixture dedicata. |
 
 ## S3 con batteria e motore collegati
 
@@ -29,9 +29,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. L'utente conferma USB, stato ROM già attivo e stabilità del S3 con batteria/motore collegati. Nessuno smontaggio. C6 solo USB, antenna collegata e attuatori esterni isolati.
-2. Eseguire il preflight consentito sulla scheda in ROM senza reset, doppie letture, confronto SHA-256 e piano di recupero per scheda. Se la ROM S3 non è già disponibile o emergono transizioni/rischi, lasciare il S3 fermo. Il backup integrale storico C6 precede l'app DEV osservata per ultima.
-3. Con l'evidenza elettrica mancante risolta e dopo approvazione distinta delle immagini, del provisioning e del recupero, programmare e collaudare DRA1. I casi negativi fisici richiedono una fixture separata.
+1. Conservare il radar in ROM, con sola USB e attuatori isolati. Riverificare le regioni correnti se una scheda viene riavviata fra preflight e installazione.
+2. Approvare i candidati radio e provisioning già verificati contro i layout e le regioni da preservare. Concordare le sole scritture di app e, separatamente, il provisioning e gli eventuali ripristini. Rivalutare alimentazione e attuatori se la configurazione cambia.
+3. Dopo approvazione distinta, programmare e collaudare DRA1. I casi negativi fisici richiedono una fixture separata.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -71,3 +71,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | S3 banco radio | 878848 | `f40ededc073f939f4a1c1d056e51f02e61a1b6b9be20c8dfa4cc770b83d29b86` |
 | C6 standard no_ota | 971136 | `c8ec66e56009f9d93f64dd8fcf36ee5ba73c8114c5bf264ad5ec58f7feb5d575` |
 | C6 DEV no_ota | 967360 | `c42fc411fc957d88a5a8824655aad07a39a14d5a29330533c818b29ef17ecba2` |
+
+## Preflight S3 in ROM — configurazione USB senza batteria
+
+- **PASS** porte riconfermate, S3 su COM11 e C6 su COM12. Dopo il timeout iniziale, ingresso ROM manuale confermato dall'operatore e dalla sonda. ESP32-S3 rev. 0.2 e flash 16 MiB. Inventario eFuse in sola lettura: Secure Boot e Flash Encryption disattivati, download via USB disponibile. Nessun reset automatico, stub S3 o scrittura persistente.
+- **PASS** doppia lettura della tabella partizioni, di NVS, di otadata e della prima pagina di ciascuno slot. Tabella con MD5 valido e identica al backup originale. NVS e otadata identiche al termine del trial minimale. Entry con CRC corretti: OTA0 seq 3 VALID a `0xe000`, OTA1 seq 4 VALID a `0xf000`. Il prossimo boot normale selezionerebbe OTA1. Applicazione effettivamente avviata e canale restano **NOT RUN**.
+- **PASS** entrambe le copie originali da 16 MiB e due dump correnti completi per ciascuno slot da 3 MiB, identici byte per byte e per SHA-256. Anche il doppio MD5 della ROM concorda. Bootloader/tabella e OTA0 coincidono con l'originale. OTA1 coincide con la ricostruzione da readback dell'app minimale, padding dell'ultimo settore e coda salvata prima del trial. Il timeout seriale fisso sul PC evita riconfigurazioni per ogni richiesta ROM da 64 byte e ha portato la lettura a circa 85 KiB/s. Copie, hash e piano di recupero restano privati.
+- **PASS compatibilità** verificati SHA-256, chip, tabelle e intervalli di erase dei quattro candidati radio e provisioning S3/C6. OTA1 già selezionato consente di pianificare la sostituzione dell'app S3 senza aggiornare otadata. **NOT RUN** programmazione, provisioning, rollback e collaudo fisico.
+- **PASS revisione DRA1** nove gruppi host, più sanitizzatori. Il nuovo caso verifica che un retry rifiutato dalla coda TX consumi un tentativo senza incrementare `probe_retry_queued`. Il loop applicativo possiede macchina di stato e contatori. La callback ESP-NOW accoda i dati e usa un contatore atomico distinto per i drop. Il checkpoint cambia test e documentazione, quindi le cinque immagini del checkpoint precedente restano valide per gli stessi sorgenti firmware.
