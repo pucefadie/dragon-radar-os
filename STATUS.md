@@ -279,3 +279,9 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **STOP** l'operatore ha segnalato vibrazione mentre era in corso la lettura flash con stub in RAM, prima della fase di scrittura. Interrotto il processo. Conservati un dump completo da 4 MiB e una seconda lettura parziale da 3.670.016 byte. Tutti i byte della seconda lettura coincidono con la prima, ma manca il secondo backup integrale.
 - **NOT RUN** flash, readback e avvio M3a. L'impulso di avvio da 60 ms del candidato non può spiegare l'evento perché M3a non è stato installato. Nessuna scrittura o ripristino eseguito. Log e dump conservati in locale.
 - **Riscontro operatore** vibrazione continua durante l'evento, assente dopo il ricollegamento USB. COM12 riconfermata dall'inventario USB. Il livello D4 durante l'evento non è stato misurato. La causa resta aperta. Prima di un altro ingresso in ROM, togliere alimentazione e scollegare completamente il modulo Grove. Riprendere backup e verifica ROM a motore isolato. Ricollegare il Grove a scheda spenta soltanto dopo aver verificato il comportamento di D4 durante reset e ROM.
+
+### M3a — backup ROM con motorino isolato
+
+- **PASS** dopo lo scollegamento del Grove confermato dall'operatore, XIAO ESP32-C6 su COM12 in ROM con flash da 4 MiB. Due letture indipendenti integrali identiche, con checksum di trasporto e SHA-256 verificati. Backup conservati fuori da Git.
+- **PASS** layout `no_ota`, app0 a `0x10000` da 2 MiB e firmware LED USER precedente confermati. Confronto con la cattura prima dell'interruzione identico fuori dalla NVS. In NVS si osservano quattro variazioni logiche PHY; DRC1 invariato e DRC2 assente.
+- **PENDING misura operatore** C6 lasciato in ROM con stub in RAM, Grove scollegato. Misurare D4/GPIO22 rispetto a GND nello stato attuale. Rimane da verificare il transitorio di reset prima di ricollegare il modulo. **NOT RUN** scrittura, readback M3a e collaudo del motore.
