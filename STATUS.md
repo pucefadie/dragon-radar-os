@@ -33,9 +33,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Dopo autorizzazione hardware, verificare il backup corrente S3 e la selezione di OTA1.
-2. Installare e verificare in rilettura la sola app S3 UI Trial M2b, mantenendo il C6 attuale.
-3. Collaudare la ricerca in modalità Chiuso, incluso il recupero del segnale dopo standby.
+1. Verificare a vista launcher, navigazione e schermata Radar in modalità Reale.
+2. Collaudare la ricerca avvicinandosi e allontanandosi dalla sfera, poi confermare il ritrovamento via touch.
+3. Provare standby e risveglio e verificare in Debug l'invalidazione e il ritorno delle misure dopo un nuovo ACK.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -224,9 +224,18 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **Baseline fisica conservata** S3 UI Trial M2a SHA-256 `717ff2da669e39b88c15faf17a5c5df8d53f68122cc760fdc2a3e123405652b4`. C6 con LED USER SHA-256 `0664809c7553487947b7ff330a55c6cf8be480881c95998984b2cc83b23ce07e`.
 - **NOT RUN collaudo fisico** dopo autorizzazione riconfermare S3 e OTA1 in ROM e verificare le copie correnti. Programmare la sola app S3 e verificarla in rilettura, conservando OTA0, otadata e impostazioni. Usare il C6 già installato. Avviare Chiuso sul canale 6 senza AP. Con alimentazione USB e attuatori isolati, osservare avvicinamento e allontanamento, perdita temporanea e standby. Controllare in Debug valori grezzo e filtrato, età e qualità, poi confermare manualmente il ritrovamento. La calibrazione delle soglie richiede prove nell'ambiente reale.
 
-### M2b — preflight hardware avviato
+### M2b — primo tentativo di preflight hardware
 
 - **PASS offline** candidato da 1.775.760 byte e SHA-256 autorizzato confermati. La baseline M2a coincide per SHA-256 con il readback conservato. Verificati le due copie integrali originali da 16 MiB, identiche byte per byte, e il manifest delle catture M2a. Sono riferimenti storici per il prossimo confronto live.
 - **PASS identificazione USB** COM11 coincide con l'identità USB storica del radar. Il tentativo mirato ha utilizzato solo COM11.
 - **FAIL accesso ROM** il tentativo esptool senza reset ha restituito `No serial data received`. Modalità corrente e stabilità del trasporto in ROM da verificare. Serve confermare fisicamente alimentazione solo USB e isolamento di batteria e attuatori prima di entrare in ROM.
 - **NOT RUN** verifica live di tabella partizioni, selezione OTA e backup corrente, scrittura e readback, avvio di UI e launcher, DRA1 Paired per 60 s sul canale 6 senza AP, RSSI, standby e confronto NVS. Touch e prove di movimento attendono osservazione dell'operatore. Nessuna scrittura, reset o rollback richiesto. Il C6 è rimasto intatto. Log privato.
+
+### M2b — installazione e collaudo automatico S3
+
+- **PASS preflight live** dopo ingresso manuale in ROM, radar riconfermato su COM11, ESP32-S3 con flash da 16 MiB, Secure Boot e Flash Encryption disabilitati. Due letture identiche di intestazione flash, NVS, otadata e intero slot OTA1 da 3 MiB. OTA0, bootloader e tabella coincidono con l'originale. OTA1 coincideva con la baseline M2a ed era già selezionato, sequenza 4 VALID. Banco alimentato via USB con batteria e attuatori scollegati secondo la configurazione già documentata. Il PMIC all'avvio ha confermato batteria assente e la diagnostica GPIO riportava SafeOff.
+- **PASS installazione e readback** scritti in OTA1 a `0x310000` solo i 1.775.760 byte del candidato autorizzato. Settori interessati fino a `0x4c1fff`. Rilettura integrale prima dell'avvio identica per byte, SHA-256 `683c4c316fd7a0e6427c1a7029ef7810efa3dc96cdca4960352dd1929b226a76`. NVS, otadata, OTA0, bootloader, tabella e coda OTA1 verificati prima dell'avvio.
+- **PASS avvio e DRA1 offline** console risponde, inizializzazione AMOLED CO5300 e touch CST9217 riuscita. Canale 6, STA senza AP, 31 campioni Paired in 60,70 s. Conferme 12 → 22 e callback RX 59 → 105. Retry accodati 32 → 58. Zero rifiuti di autenticazione, drop RX, errori di consegna e stalli TX.
+- **PASS diagnostica RSSI su USB** grezzo da −26 a −24 dBm, filtrato da −25,2 a −24,1 dBm, età da 163 a 9.510 ms e qualità 3 in tutti i 31 campioni Paired. Al primo avvio la misura risultava indisponibile prima del primo ACK. La prova sul campo della scadenza a 10 s e del filtro dopo standby resta da eseguire.
+- **PASS integrità dopo il campione** doppia lettura NVS identica byte per byte al preflight. DRC1 identico, DRC2 assente, metadati Wi-Fi invariati e nessuna variazione PHY osservata. OTA0, bootloader, tabella, coda OTA1 e otadata invariati. OTA1 sequenza 4 VALID. Dopo le letture ROM, riavvio normale e risposta dell'app M2b confermata. C6 intatto, nessun rollback. Backup e log privati.
+- **NOT RUN osservazioni dell'operatore** resa AMOLED e launcher, navigazione touch, schermata Debug sul pannello, avvicinamento, allontanamento, oscillazioni, conferma manuale del ritrovamento e recupero RSSI dopo standby. Per provarli, usare **Impostazioni → Radar → Reale** con il C6 acceso, confrontare grafica e campi Debug mentre ci si muove, quindi confermare via touch e provare standby e risveglio.
