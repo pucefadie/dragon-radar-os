@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ota_service.h"
 #include <WiFi.h>
 #include "display_module.h"
@@ -1518,16 +1519,18 @@ void displayRenderRadarApp(const RadarView &v) {
     const auto &signal = v.proximity;
     const bool found = signal.state == ProximityState::Found;
     const bool available = link == SecureLinkStatus::Paired && signal.fresh;
-    const unsigned level = available ? unsigned(signal.quality) : 0;
-    for (unsigned i = 0; i < 3; ++i)
-      d->drawCircle(233,233,43+16*i,i < level ? RADAR_COLOR_YELLOW : RADAR_COLOR_GRID_DARK);
-    drawCenteredText(d, 324, proximityLabel(signal,link), RADAR_COLOR_YELLOW, 2);
-    if (available) {
-      snprintf(text,sizeof(text),"RSSI %s",signalQualityLabel(signal.quality));
-      drawCenteredText(d, 349,text,RADAR_COLOR_BG,1);
-    } else {
-      drawCenteredText(d, 349,secureLinkLabel(link),RADAR_COLOR_BG,1);
+    constexpr int ringCount = 3;
+    constexpr int stepsPerRing = kProximityMaxLevel / ringCount;
+    const int level = available ? signal.level : 0;
+    for (int i = 0; i < ringCount; ++i) {
+      const int radius = 34 + 20*i;
+      d->drawCircle(233,233,radius+2*stepsPerRing,RADAR_COLOR_GRID_DARK);
+      const int steps = std::min(stepsPerRing,std::max(0,level-i*stepsPerRing));
+      for (int j = 0; j < 2*steps; ++j)
+        d->drawCircle(233,233,radius+j,RADAR_COLOR_YELLOW);
     }
+    drawCenteredText(d, 324, proximityLabel(signal,link), RADAR_COLOR_YELLOW, 2);
+    drawCenteredText(d, 349,secureLinkLabel(link),RADAR_COLOR_BG,1);
     if (available || found) {
       d->fillRoundRect(RADAR_FOUND_X,RADAR_FOUND_Y,RADAR_FOUND_WIDTH,RADAR_FOUND_HEIGHT,8,RADAR_COLOR_BG);
       drawCenteredText(d, 388,found ? "NUOVA RICERCA" : "CONFERMA RITROVAMENTO",RADAR_COLOR_WHITE,2);
@@ -1626,8 +1629,10 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
       const auto signal=beaconServiceProximity();
       if (signal.seen) {
         snprintf(e,sizeof(e),"RAW %d FILT %.1f dBm",int(signal.raw),double(signal.filtered));
-        snprintf(detail,sizeof(detail),"ETA %.1f s %s",double(signal.age_ms)/1000.0,
-                 signal.fresh ? signalQualityLabel(signal.quality) : "SCADUTO");
+        if (signal.fresh)
+          snprintf(detail,sizeof(detail),"ETA %.1fs %s %u/%u",double(signal.age_ms)/1000.0,
+                   signalQualityLabel(signal.quality),unsigned(signal.level),unsigned(kProximityMaxLevel));
+        else snprintf(detail,sizeof(detail),"ETA %.1fs SCADUTO",double(signal.age_ms)/1000.0);
       } else snprintf(e,sizeof(e),"ATTESA RSSI DRA1");
       break;
     }

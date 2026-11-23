@@ -215,9 +215,9 @@ void beaconServicePrint(Stream &out) {
 #if CONFIG_IDF_TARGET_ESP32S3
   const auto signal=beaconServiceProximity();
   if (signal.seen)
-    out.printf("DRA1_RSSI_RAW=%d DRA1_RSSI_FILTERED=%.1f DRA1_RSSI_AGE_MS=%lu DRA1_RSSI_FRESH=%d DRA1_RSSI_QUALITY=%u\n",
-               int(signal.raw),double(signal.filtered),(unsigned long)signal.age_ms,signal.fresh,unsigned(signal.quality));
-  else out.println("DRA1_RSSI_FRESH=0 DRA1_RSSI_QUALITY=0");
+    out.printf("DRA1_RSSI_RAW=%d DRA1_RSSI_FILTERED=%.1f DRA1_RSSI_AGE_MS=%lu DRA1_RSSI_FRESH=%d DRA1_RSSI_QUALITY=%u DRA1_RSSI_LEVEL=%u\n",
+               int(signal.raw),double(signal.filtered),(unsigned long)signal.age_ms,signal.fresh,unsigned(signal.quality),unsigned(signal.level));
+  else out.println("DRA1_RSSI_FRESH=0 DRA1_RSSI_QUALITY=0 DRA1_RSSI_LEVEL=0");
 #endif
 #endif
   out.println("[BEACON] RSSI non fornisce distanza o direzione; nessuna localizzazione reale.");

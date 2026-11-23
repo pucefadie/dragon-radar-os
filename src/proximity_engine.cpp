@@ -1,6 +1,14 @@
 #include "proximity_engine.h"
 #include <algorithm>
 
+namespace {
+// Minimum filtered RSSI for levels 2 through 15, in dBm.
+constexpr int8_t kLevelThreshold[kProximityMaxLevel - 1] = {
+  -84, -77, -70, -64, -59, -54, -49, -44, -39, -34, -29, -25, -21, -15
+};
+constexpr float kLevelHysteresisDb = 2.5f;
+}
+
 void ProximityEngine::sample(int8_t rssi, uint32_t received, uint32_t now) {
   const uint32_t age = now - received;
   if (suspended_ || age >= cfg_.stale_ms || rssi >= 0 || rssi == INT8_MIN) return;
@@ -12,6 +20,7 @@ void ProximityEngine::sample(int8_t rssi, uint32_t received, uint32_t now) {
     filtered_ = reference_ = rssi;
     trend_ = pending_ = ProximityState::Stable;
     quality_ = SignalQuality::Unavailable;
+    level_ = 1;
   }
   raw_ = rssi;
   history_[index_] = rssi;
@@ -25,6 +34,7 @@ void ProximityEngine::sample(int8_t rssi, uint32_t received, uint32_t now) {
   const float delta = filtered_ - reference_;
   reference_ += cfg_.reference_smoothing * delta;
   updateQuality();
+  updateLevel();
   updateTrend(delta);
   lastSample_ = received;
   seen_ = valid_ = true;
@@ -63,6 +73,13 @@ void ProximityEngine::updateQuality() {
     quality_ = SignalQuality::Fair;
 }
 
+void ProximityEngine::updateLevel() {
+  while (level_ < kProximityMaxLevel && filtered_ >= kLevelThreshold[level_ - 1])
+    ++level_;
+  while (level_ > 1 && filtered_ < kLevelThreshold[level_ - 2] - kLevelHysteresisDb)
+    --level_;
+}
+
 ProximitySnapshot ProximityEngine::snapshot(uint32_t now) const {
   ProximitySnapshot s;
   s.seen = seen_;
@@ -71,6 +88,7 @@ ProximitySnapshot ProximityEngine::snapshot(uint32_t now) const {
   s.age_ms = seen_ ? now - lastSample_ : 0;
   s.fresh = valid_ && s.age_ms < cfg_.stale_ms;
   s.quality = s.fresh ? quality_ : SignalQuality::Unavailable;
+  s.level = s.fresh ? level_ : 0;
   if (found_) s.state = ProximityState::Found;
   else if (!s.fresh) s.state = seen_ ? ProximityState::Lost : ProximityState::Searching;
   else if (trend_ != ProximityState::Stable) s.state = trend_;

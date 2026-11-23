@@ -31,7 +31,8 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 
 ## M2 — Esperienza radar (successiva a M1)
 - **M2a completata** stato DRA1 della sfera ID 1 nel Radar e in Debug, banco S3 UI Trial offline e C6 sul canale 6. Verificati pairing, UI e ripresa dopo standby.
-- **M2b Chiuso** RSSI degli ACK DRA1 autenticati, filtro con isteresi, conferma manuale del ritrovamento e diagnostica della freschezza. Test software e collaudo fisico qualitativo passati. Resta la taratura a breve distanza. Misurare prima con la configurazione attuale e valutare un confronto tra antenne se serve.
+- **M2b Chiuso** RSSI degli ACK DRA1 autenticati, filtro con isteresi, conferma manuale del ritrovamento e diagnostica della freschezza. Test software e collaudo fisico qualitativo passati.
+- **M2b.1 scala RSSI** 15 livelli grafici su tre anelli, con più risoluzione a segnale forte. Isteresi grafica separata da qualità RSSI e stato DRA1. Test host e build S3 UI Trial passati. Confronto sul campo con M2b ancora da eseguire con la configurazione radio già collaudata.
 - UI e launcher bottom-up con modalità Radar / Audiobookshelf / Impostazioni / Debug.
 - Evoluzione successiva: modalità Aperto con GPS ed ESP-NOW, mantenendo Chiuso utilizzabile con il solo ESP-NOW.
 - Non convertire RSSI in metri o direzione; ritrovamento sotto circa 30 cm deciso visivamente. Bussola serve orientamento interfaccia, non triangolazione RSSI. Fix GPS e log posizione sono opzionali in modalità Chiuso.

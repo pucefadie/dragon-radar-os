@@ -31,11 +31,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | C6 standard no_ota | 970880 | `89ec01d90823313771fe393489384f512bd295670d7f7f1630a5563e19f9b61f` |
 | C6 provisioning no_ota | 263008 | `705a737d66416b8fff38a276d79981177f50ea5f208485db3603b931044b7d64` |
 
-## Prossime azioni M2b
+## Prossime azioni M2b.1
 
-1. Raccogliere serie RSSI a breve distanza con l'antenna esterna, ripetendo il percorso con orientamenti diversi.
-2. Tarare la risposta grafica ai segnali forti, usando le variazioni misurate e verificando la stabilità a radar fermo.
-3. Se la taratura lascia poca separazione, confrontare antenna esterna e interna in una prova A/B separata, includendo conferme DRA1 e retry.
+1. Salvare un campione M2b a posizioni fisse, con la configurazione del C6 attuale e orientamenti ripetibili.
+2. Dopo autorizzazione, verificare in ROM backup e selezione OTA1, installare la sola app S3 M2b.1 e verificarla in rilettura.
+3. Ripetere le misure nelle stesse posizioni e confrontare risoluzione, stabilità e risposta al movimento.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -243,3 +243,13 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS controllo seriale successivo** Paired sul canale 6 senza AP, conferme 55 → 56, zero nuovi retry, drop RX, rifiuti di autenticazione o stalli TX nel breve campione. RSSI valido, grezzo da −20 a −19 dBm, filtrato da −19,3 a −19,2 dBm. Il campione documenta lo stato successivo alla prova e non contiene la transizione di standby.
 
 - **Ipotesi per la taratura** il livello forte resta invariato sopra la soglia di −60 dBm, anche quando l'RSSI continua a variare. Raccogliere misure con l'antenna attuale e verificare prima la risoluzione della grafica e la risposta del filtro. Lo XIAO può commutare tra antenna ceramica e U.FL tramite GPIO14. Un confronto A/B deve mostrare che l'antenna interna migliora la separazione dei valori a breve distanza senza degradare il collegamento. Un eventuale cambio automatico richiede isteresi e riavvio del filtro RSSI, perché la commutazione stessa modifica il riferimento. [Documentazione Seeed](https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/)
+
+
+## M2b.1 — più risoluzione grafica a breve distanza
+
+- M2b associava direttamente qualità debole, media e forte agli anelli. Sopra −60 dBm la grafica restava al massimo anche con valori misurati intorno a −19 dBm.
+- M2b.1 converte il valore filtrato in 15 livelli grafici su tre anelli, nominalmente da −90 a −15 dBm. Le soglie distano da 4 a 7 dB, con gradini più stretti vicino alle misure del banco. L'isteresi grafica di 2,5 dB impedisce passaggi ripetuti tra due livelli per oscillazioni di 1–2 dB. Il filtro mediano ed esponenziale, le soglie della qualità, la tendenza e la scadenza a 10 s sono quelli di M2b.
+- L'intensità determina lo spessore degli anelli, la tendenza compare nel messaggio centrale e il collegamento DRA1 su una riga separata. Il ritrovamento resta manuale. In Debug e su `beacons` sono presenti grezzo, filtrato, qualità, età e livello. Il livello 0 indica misura indisponibile.
+- **PASS host** 10 esecuzioni con `-Wall -Wextra -Werror` e ASan/UBSan per prossimità e DRA1. I valori −85, −65, −60, −45, −30, −24 e −19 dBm hanno prodotto i livelli 1, 4, 5, 8, 11, 13 e 14. Verificati i limiti della scala, le oscillazioni ripetute di 2 dB intorno a una soglia, la scadenza, l'invalidazione e il recupero.
+- **PASS build S3 UI Trial** Arduino ESP32 3.3.12, `RADAR_UI_TRIAL=1 RADIO_DEV_INSECURE=0 scripts/build_linux.sh`. Verificati ESP32-S3, checksum, hash interno, corrispondenza dei sorgenti di staging e tabella partizioni rispetto alla lettura ROM. App da 1.775.984 byte, SHA-256 `8752e14abd7d229edf5e08f068b3097a743d33eb26826fb9aab70fb6143360a9`. OTA1 a `0x310000`, settori fino a `0x4c1fff`. Binario e log conservati fuori da Git.
+- **NOT RUN confronto fisico** raccogliere serie nelle stesse posizioni e con gli stessi orientamenti, annotando RSSI grezzo e filtrato, età, livello e retry. Confrontare gli anelli a breve distanza e verificarne la stabilità a radar fermo. Antenna e protocollo radio non richiedono modifiche per questa prova.

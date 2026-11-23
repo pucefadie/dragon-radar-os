@@ -4,6 +4,8 @@
 enum class ProximityState : uint8_t { Searching, Weak, Stable, Approaching, MovingAway, Near, Found, Lost };
 enum class SignalQuality : uint8_t { Unavailable, Weak, Fair, Strong };
 
+constexpr uint8_t kProximityMaxLevel = 15;
+
 struct ProximityConfig {
   int8_t weak = -82, near = -60;
   float hysteresis_db = 4.0f, smoothing = 0.35f, reference_smoothing = 0.25f;
@@ -19,6 +21,7 @@ struct ProximitySnapshot {
   ProximityState state = ProximityState::Searching;
   SignalQuality quality = SignalQuality::Unavailable;
   uint32_t age_ms = 0;
+  uint8_t level = 0;
 };
 
 class ProximityEngine {
@@ -34,9 +37,10 @@ class ProximityEngine {
  private:
   void updateTrend(float delta);
   void updateQuality();
+  void updateLevel();
   ProximityConfig cfg_;
   int8_t history_[5]{}, raw_ = 0;
-  uint8_t count_ = 0, index_ = 0, pendingCount_ = 0;
+  uint8_t count_ = 0, index_ = 0, pendingCount_ = 0, level_ = 1;
   float filtered_ = 0, reference_ = 0;
   uint32_t lastSample_ = 0;
   uint32_t resumedAt_ = 0;
