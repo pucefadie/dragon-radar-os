@@ -15,14 +15,15 @@ class SecureEspNow final : private SecureRadioIo {
   explicit SecureEspNow(DevRadioTx &tx) : tx_(tx) {}
 
   // Only a deliberately provisioned one-sphere link may register an encrypted peer.
-  bool begin(bool controller) {
+  bool begin(bool controller, bool (*prepareChannel)(uint8_t) = nullptr) {
     if (radio_) return true;
     nvs_handle_t storage;
     SecureRadioConfig config{};
     if (nvs_open(SECURE_RECORD_NAMESPACE,NVS_READONLY,&storage)!=ESP_OK) return false;
     const bool loaded=secureRadioLoadConfig(readRecord,&storage,config);
     nvs_close(storage);
-    if (!loaded || !secureRadioResolvePmk(config,*this)) {
+    if (!loaded || !secureRadioResolvePmk(config,*this) ||
+        (prepareChannel && !prepareChannel(config.channel))) {
       secureRadioClear(&config,sizeof(config));
       return false;
     }

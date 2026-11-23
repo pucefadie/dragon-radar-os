@@ -2,6 +2,9 @@
 #include "beacon_protocol.h"
 #include "beacon_registry.h"
 #include "dev_radio.h"
+#if RADAR_UI_TRIAL
+#include "wifi_service.h"
+#endif
 #if RADIO_DEV_INSECURE
 #include "dev_radio_tx.h"
 #elif !defined(RADIO_RX_HOST_TEST)
@@ -71,7 +74,11 @@ void beaconServiceInit() {
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   if (secureTx.init(false)) {
     txRegisterResult=esp_now_register_send_cb(txDone);
+#if RADAR_UI_TRIAL
+    secureReady=txRegisterResult==ESP_OK && secure.begin(true, wifiServicePrepareOfflineChannel);
+#else
     secureReady=txRegisterResult==ESP_OK && secure.begin(true);
+#endif
   }
 #endif
 #if RADIO_DEV_INSECURE

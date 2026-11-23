@@ -42,7 +42,7 @@ cat > "$stage/dragon_radar_sketch.ino" <<'SKETCH'
 SKETCH
 python3 "$project/scripts/embed_audio.py" "$project/assets/radar_reference_s16le.pcm" "$stage/radar_beep_data.h"
 python3 "$project/scripts/embed_codec_sample.py" "$project/assets/codec_probe.mp3" "$stage/codec_test_data.h"
-"$ARDUINO_CLI" compile --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=$RADIO_DEV_INSECURE" \
+"$ARDUINO_CLI" compile --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=$RADIO_DEV_INSECURE -DRADAR_UI_TRIAL=$RADAR_UI_TRIAL" \
  "${flags[@]}" \
  --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB' \
  --jobs 4 --libraries "$project/references/libraries" --libraries "$out/libraries" \

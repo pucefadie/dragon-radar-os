@@ -32,9 +32,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Risolvere in M2a la persistenza dei metadati STA durante l'avvio del radar. Il requisito consente i soli aggiornamenti ordinari PHY. Il radar con UI Trial installato resta in ROM.
-2. Ripetere il collaudo dopo aver verificato offline la correzione. Per la sessione fisica occorre un canale comune al radar e al C6. Il C6 M1d è configurato sul 6 e l'AP osservato durante questa prova usa il canale 1.
-3. Completare i 60 s DRA1 e la verifica visiva di display e touch con alimentazione USB, batteria e attuatori scollegati. Confrontare di nuovo DRC1, assenza di DRC2, NVS logica e otadata dopo l'avvio.
+1. Dopo autorizzazione per il nuovo hash UI Trial offline, riconfermare in ROM identità, OTA1 e backup correnti del radar. Installare e rileggere solo OTA1.
+2. Verificare via seriale STA senza AP, canale effettivo 6 e 60 s DRA1 Paired con il C6 M1d. Alimentare solo via USB con batteria e attuatori scollegati.
+3. Confrontare DRC1, assenza di DRC2, NVS logica e otadata dopo l'avvio. Completare la verifica visiva di display e touch.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -177,3 +177,12 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS configurazione DRA1, BLOCKED prova Paired** DRC1 caricato, PMK e peer inizializzati. AP associato sul canale 1 e associazione DRC1 sul 6. Il radar ha riportato `aligned=0 state=2 confirmed=0`. La prova Paired da 60 s richiede un canale comune.
 - **FAIL vincolo NVS dopo l'avvio** due letture ROM identiche e CRC validi. DRC1 identico al backup e DRC2 assente. Oltre a quattro differenze logiche PHY, il confronto ha rilevato quattro differenze nel namespace STA `nvs.net80211`, sui record `sta.apinfo` e `sta.chan`. Il risultato supera il vincolo PHY-only. Bootloader, tabella partizioni, OTA0, otadata e immagine OTA1 verificati dopo l'avvio.
 - Prova interrotta con il radar in ROM e UI Trial installato. Il C6 ha conservato la configurazione M1d. Nessun rollback eseguito. Log e copie NVS conservati fuori da Git.
+
+### M2a — UI Trial offline
+
+- `sta.apinfo` e `sta.chan` sono metadati STA del namespace SDK `nvs.net80211`. Le variazioni osservate nel checkpoint `9ff4124` sono coerenti con l'associazione automatica all'AP sul canale 1.
+- Il profilo `RADAR_UI_TRIAL=1` disabilita la persistenza Arduino e la riconnessione prima di avviare STA, verifica `WIFI_STORAGE_RAM` e resta offline per tutta la prova. In Arduino ESP32 3.3.12, `WiFi.persistent(false)` imposta il criterio per la successiva inizializzazione, quindi l'ordine precede `WiFi.mode(WIFI_STA)`. Il profilo standard conserva il portale, il salvataggio esplicito e le transizioni di connessione.
+- Il peer ESP-NOW usa il canale letto dal record radio validato. Per il banco DRC1 corrente è 6. La prova imposta e rilegge il canale prima di registrare il peer e richiede che STA sia disassociata. Il loader apre i record in sola lettura. L'ultimo dump verificato conserva DRC1 identico e DRC2 assente. Il guard contro la cancellazione integrale NVS resta attivo nel candidato.
+- **PASS host** profili standard e Trial, conservazione credenziali simulate, canale 6 e un secondo canale parametrico, rifiuto del cambio con AP associato, rilettura canale errata e fallimento della selezione RAM. Il test standard copre salvataggio esplicito, connessione, scollegamento e retry. Passati ASan/UBSan sul profilo Trial e il test regressione della callback beacon.
+- **PASS build e verifica** `RADAR_UI_TRIAL=1 scripts/build_linux.sh <directory-nuova>` con Arduino ESP32 3.3.12. Verificati formato, checksum, hash d'immagine, tabella rispetto al backup e chiamate effettive nell'ELF per storage RAM, canale e guard NVS. Candidato da 1.772.704 byte, SHA-256 `717ff2da669e39b88c15faf17a5c5df8d53f68122cc760fdc2a3e123405652b4`, OTA1 `0x310000`, settori interessati fino a `0x4c0fff`.
+- **NOT RUN** flash, reset, prova DRA1 60 s e confronto della NVS post-avvio sul nuovo candidato. Il confronto fisico deve confermare DRC1 identico, assenza di DRC2 e sole eventuali differenze PHY.
