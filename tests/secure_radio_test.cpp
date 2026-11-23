@@ -205,7 +205,7 @@ int main() {
   auto rc=make(4), sc=make(2);
   SecureRadio radar(radarWire,true,rc), sphere(sphereWire,false,sc);
   auto toSphere=[&](const Frame &f,uint32_t t){sphere.receive(radarMac,f.data(),f.size(),t);};
-  auto toRadar=[&](const Frame &f,uint32_t t){radar.receive(sphereMac,f.data(),f.size(),t);};
+  auto toRadar=[&](const Frame &f,uint32_t t){return radar.receive(sphereMac,f.data(),f.size(),t);};
   assert(radar.state(0)==LinkState::AwaitingAuthenticatedSession);
   radar.tick(0);
   Frame hello=radarWire.take(), forged=hello;
@@ -216,7 +216,7 @@ int main() {
   assert(sphere.diagnostics().auth_rejected==1);
   toSphere(hello,1);
   Frame challenge=sphereWire.take();
-  toRadar(challenge,2);
+  assert(toRadar(challenge,2)==SecureRxEvent::None);
   assert(radar.state(2)==LinkState::AwaitingAuthenticatedSession);
   radar.tick(2);
   Frame finish=radarWire.take();
@@ -229,7 +229,7 @@ int main() {
   assert(radarWire.take()==finish);
   toSphere(finish,453);
   assert(sphereWire.take()==ready);
-  toRadar(ready,454);
+  assert(toRadar(ready,454)==SecureRxEvent::SessionStarted);
   assert(radar.state(454)==LinkState::Paired);
   assert(radar.linkStatus(454,true)==SecureLinkStatus::Paired);
   assert(radar.linkStatus(454,false)==SecureLinkStatus::ChannelMismatch);
@@ -247,16 +247,20 @@ int main() {
   assert(radar.diagnostics().probe_retry_queued==1);
   assert(sphere.diagnostics().duplicate_probe==1);
   forged=ack; forged[12]^=1;
-  toRadar(forged,906);
+  assert(toRadar(forged,906)==SecureRxEvent::None);
   assert(radar.confirmations()==0);
   assert(radar.diagnostics().auth_rejected==0); // Malformed ACK is rejected before HMAC.
   forged=ack; forged[79]^=1;
-  toRadar(forged,906);
-  radar.receive(wrongMac,ack.data(),ack.size(),906);
+  assert(toRadar(forged,906)==SecureRxEvent::None);
+  assert(radar.receive(wrongMac,ack.data(),ack.size(),906)==SecureRxEvent::None);
+  Frame wrongSequence=ack;
+  wrongSequence[12]^=1;
+  assert(radarWire.sign(rc.auth,wrongSequence.data(),48,wrongSequence.data()+48));
+  assert(toRadar(wrongSequence,906)==SecureRxEvent::None);
   assert(radar.confirmations()==0);
   assert(radar.diagnostics().auth_rejected==1);
-  toRadar(ack,907);
-  toRadar(ack,908);
+  assert(toRadar(ack,907)==SecureRxEvent::ProbeAck);
+  assert(toRadar(ack,908)==SecureRxEvent::None);
   assert(radar.confirmations()==1);
 
   Wire rebootWire(90);
@@ -270,7 +274,7 @@ int main() {
   radar.tick(16000);
   Frame nextHello=radarWire.take();
   toRadar(challenge,16001);
-  toRadar(ready,16002);
+  assert(toRadar(ready,16002)==SecureRxEvent::None);
   assert(radar.state(16002)==LinkState::Lost);
   assert(radar.linkStatus(16002,true)==SecureLinkStatus::Lost);
   assert(radar.linkStatus(16002,false)==SecureLinkStatus::ChannelMismatch);
@@ -279,10 +283,10 @@ int main() {
   radar.tick(16004);
   Frame nextFinish=radarWire.take();
   rebooted.receive(radarMac,nextFinish.data(),nextFinish.size(),16005);
-  toRadar(rebootWire.take(),16006);
+  assert(toRadar(rebootWire.take(),16006)==SecureRxEvent::SessionStarted);
   assert(radar.state(16006)==LinkState::Paired);
   assert(radar.linkStatus(16006,true)==SecureLinkStatus::Paired);
-  toRadar(ack,16006);
+  assert(toRadar(ack,16006)==SecureRxEvent::None);
   assert(radar.confirmations()==1);
   assert(radar.diagnostics().stale_session==1);
   rebooted.receive(radarMac,probe.data(),probe.size(),16007);

@@ -30,9 +30,10 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - L'estensione a ID 1–7 conserverà un solo valore PMK per radio e una configurazione separata per peer. Il limite software corrente è ID 1.
 
 ## M2 — Esperienza radar (successiva a M1)
-- Primo passo: mostrare nel Radar e in Debug lo stato DRA1 della sfera ID 1 già provisionata. Verificare display, touch, allineamento di canale e recupero con un collaudo dedicato del firmware S3 completo in OTA1.
+- **M2a completata** stato DRA1 della sfera ID 1 nel Radar e in Debug, banco S3 UI Trial offline e C6 sul canale 6. Verificati pairing, UI e ripresa dopo standby.
+- **M2b Chiuso** RSSI degli ACK DRA1 autenticati, filtro con isteresi, conferma manuale del ritrovamento e diagnostica della freschezza. Implementazione e test software nel ramo `feat/espnow-m1-bidirectional`; collaudo fisico e calibrazione delle soglie ancora da eseguire.
 - UI e launcher bottom-up con modalità Radar / Audiobookshelf / Impostazioni / Debug.
-- Modalità Aperto GPS+ESP-NOW e Chiuso solo ESP-NOW; progressione prossimità con smoothing/isteresi RSSI e soglie per modalità.
+- Evoluzione successiva: modalità Aperto con GPS ed ESP-NOW, mantenendo Chiuso utilizzabile con il solo ESP-NOW.
 - Non convertire RSSI in metri o direzione; ritrovamento sotto circa 30 cm deciso visivamente. Bussola serve orientamento interfaccia, non triangolazione RSSI. Fix GPS e log posizione sono opzionali in modalità Chiuso.
 - Test host gesti, stati, rendering e persistenza; test hardware in sessione autorizzata.
 

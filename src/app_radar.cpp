@@ -1,4 +1,5 @@
 #include "app_radar.h"
+#include "beacon_service.h"
 #include "radar_feedback.h"
 #include "location_provider.h"
 #include "settings_manager.h"
@@ -10,7 +11,7 @@ void appRadarZoom() { OsSettings &s = settingsGet(); s.zoom = (s.zoom + 1) % 7; 
 void appRadarApproach() { demo.approach(); }
 RadarView appRadarUpdate(const RadarSystemSnapshot &snap) {
   const OsSettings &s = settingsGet(); RadarView v;
-  v.range_m = scales[s.zoom < 7 ? s.zoom : 2]; v.demo = s.demo; v.gps_valid = snap.gps_fix_valid && snap.gps_fix_age_ms < 5000;
+  v.range_m = scales[s.zoom < 7 ? s.zoom : 2]; v.demo = s.demo;
   v.compass_online = snap.bmm_online; v.compass_calibrated = snap.mag_calibrated; v.heading_up = s.heading_up;
   static float heading = 0; static uint32_t last_motor = 0; static bool have_heading = false;
   if (snap.motor_active) last_motor = snap.uptime_ms;
@@ -22,7 +23,10 @@ RadarView appRadarUpdate(const RadarSystemSnapshot &snap) {
     have_heading = true;
   }
   v.heading_held = settling; v.heading = heading;
-  if (!s.demo) return v;
+  if (!s.demo) {
+    v.proximity = beaconServiceProximity();
+    return v;
+  }
   RadarPosition here; demo.position(here);
   for (unsigned i=0; i<7; ++i) {
     RadarBall ball; if (!demo.ball(i, ball) || !ball.valid || ball.found) continue;

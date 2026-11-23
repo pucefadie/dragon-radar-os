@@ -33,7 +33,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-M2a è chiusa. Per ripetere il campione, avviare normalmente il C6 M1d e il radar UI Trial offline, verificare STA senza AP e confrontare le conferme DRA1 per 60 s sul canale 6.
+1. Dopo autorizzazione hardware, verificare il backup corrente S3 e la selezione di OTA1.
+2. Installare e verificare in rilettura la sola app S3 UI Trial M2b, mantenendo il C6 attuale.
+3. Collaudare la ricerca in modalità Chiuso, incluso il recupero del segnale dopo standby.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -211,3 +213,13 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS avvio e stati DRA1 via seriale** il C6 ha caricato DRC1, inizializzato PMK e peer e raggiunto Paired sul canale 6. Conferme 2 → 8, poi transizione a Lost nel campione a circa 40 s. L'operatore ha confermato di aver messo volontariamente il radar in standby durante la prova. L'evento viene registrato come perdita indotta, senza attribuirlo a una regressione radio. Zero scarti RX, rifiuti di autenticazione e stalli TX.
 - **PASS recupero dopo il risveglio** entrambe le schede sono tornate Paired sul canale 6 senza reset, provisioning o cambi firmware. Nel campione di 60 s le conferme sono cresciute da 11 a 31 sul radar e da 17 a 37 sul C6. Callback RX S3 34 → 54 e C6 35 → 55. Nessun incremento di retry, duplicati, scarti, rifiuti di autenticazione o errori di consegna e nessuno stallo TX durante il campione.
 - **NOT RUN verifica visiva** di frequenze, LED fisso e spegnimento. Entrambe le schede sono rimaste in esecuzione. Log e backup restano privati.
+
+## M2b — ricerca RSSI autenticata in modalità Chiuso
+
+- **Implementata** la misura RSSI dalla metadata ESP-NOW dell'ACK DRA1 che chiude un probe pendente della sessione corrente. Valori mancanti o scaduti, broadcast DRB2, ACK duplicati, vecchie sessioni e tag errati sono esclusi. Formato DRA1, chiavi, associazioni e retry seguono il percorso esistente. Nessuna nuova libreria.
+- Il filtro usa mediana su cinque campioni, smoothing esponenziale, isteresi di 4 dB per qualità e due campioni coerenti per la tendenza. Le soglie iniziali sono `-82` e `-60 dBm`, con scadenza dopo 10 s. I parametri si modificano in `ProximityConfig`. Standby, perdita e nuova sessione invalidano la misura e azzerano il filtro per il campione successivo. Dopo il risveglio serve un nuovo ACK. Debug può mostrare l'ultimo valore con l'indicazione di scadenza.
+- In **Impostazioni → Radar → Reale** la schermata Chiuso usa tre anelli concentrici per evidenziare la qualità RSSI. Mostra attesa, segnale debole, tendenza di avvicinamento o allontanamento, vicinanza elevata e stato trovato. L'operatore conferma il ritrovamento dal touch e può avviare una nuova ricerca. In **Debug → Wi-Fi e sfere** e con `beacons` si leggono RSSI grezzo e filtrato, qualità ed età. Un segnale forte indica vicinanza relativa. Chiuso usa soltanto ESP-NOW.
+- **PASS host** 10 esecuzioni con `-Wall -Wextra -Werror`. Simulate salita, discesa, oscillazioni, soglie, scadenza, recupero, standby, overflow del clock e conferma manuale. Test DRA1 verificano la selezione dei soli ACK validi e regressioni su retry e fixture. Passati ASan/UBSan per prossimità e DRA1, oltre a beacon RX, standby, gesture, launcher e navigazione impostazioni.
+- **PASS build S3** UI Trial e regressione banco M1c con Arduino ESP32 3.3.12. Verificati target ESP32-S3, integrità dell'immagine, separazione da DEV e compatibilità con la tabella partizioni S3 già letta. Il candidato UI Trial misura 1.775.760 byte, SHA-256 `683c4c316fd7a0e6427c1a7029ef7810efa3dc96cdca4960352dd1929b226a76`. L'immagine rientra in OTA1 a `0x310000` e occupa i settori fino a `0x4c1fff`. Binario e log conservati fuori da Git.
+- **Baseline fisica conservata** S3 UI Trial M2a SHA-256 `717ff2da669e39b88c15faf17a5c5df8d53f68122cc760fdc2a3e123405652b4`. C6 con LED USER SHA-256 `0664809c7553487947b7ff330a55c6cf8be480881c95998984b2cc83b23ce07e`.
+- **NOT RUN collaudo fisico** dopo autorizzazione riconfermare S3 e OTA1 in ROM e verificare le copie correnti. Programmare la sola app S3 e verificarla in rilettura, conservando OTA0, otadata e impostazioni. Usare il C6 già installato. Avviare Chiuso sul canale 6 senza AP. Con alimentazione USB e attuatori isolati, osservare avvicinamento e allontanamento, perdita temporanea e standby. Controllare in Debug valori grezzo e filtrato, età e qualità, poi confermare manualmente il ritrovamento. La calibrazione delle soglie richiede prove nell'ambiente reale.

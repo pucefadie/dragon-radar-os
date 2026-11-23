@@ -1,28 +1,98 @@
 #include "proximity_engine.h"
 #include <algorithm>
-#include <cmath>
-ProximityEngine::ProximityEngine(ProximityConfig c):cfg_(c){}
-void ProximityEngine::sample(int8_t value,uint32_t now){
- raw_=value;history_[index_]=value;index_=(index_+1)%5;if(count_<5)++count_;
- int8_t sorted[5];for(uint8_t i=0;i<count_;++i)sorted[i]=history_[i];std::sort(sorted,sorted+count_);median_=sorted[count_/2];
- if(!seen_){seen_=true;ema_=median_;trendBase_=ema_;trendSince_=now;}else ema_+=0.28f*(float(median_)-ema_);
- if(uint32_t(now-trendSince_)>=2500){trendBase_=ema_;trendSince_=now;}
- lastSample_=now;
+
+void ProximityEngine::sample(int8_t rssi, uint32_t received, uint32_t now) {
+  const uint32_t age = now - received;
+  if (suspended_ || age >= cfg_.stale_ms || rssi >= 0 || rssi == INT8_MIN) return;
+  if (resumePending_ && age > now - resumedAt_) return;
+  resumePending_ = false;
+  const bool first = !valid_ || received - lastSample_ >= cfg_.stale_ms;
+  if (first) {
+    count_ = index_ = pendingCount_ = 0;
+    filtered_ = reference_ = rssi;
+    trend_ = pending_ = ProximityState::Stable;
+    quality_ = SignalQuality::Unavailable;
+  }
+  raw_ = rssi;
+  history_[index_] = rssi;
+  index_ = (index_ + 1) % 5;
+  if (count_ < 5) ++count_;
+  int8_t sorted[5];
+  std::copy_n(history_, count_, sorted);
+  std::sort(sorted, sorted + count_);
+  const float median = 0.5f * (sorted[(count_ - 1) / 2] + sorted[count_ / 2]);
+  filtered_ += cfg_.smoothing * (median - filtered_);
+  const float delta = filtered_ - reference_;
+  reference_ += cfg_.reference_smoothing * delta;
+  updateQuality();
+  updateTrend(delta);
+  lastSample_ = received;
+  seen_ = valid_ = true;
 }
-void ProximityEngine::update(uint32_t now){
- if(!seen_)return;
- if(uint32_t(now-lastSample_)>=cfg_.lost_ms){state_=ProximityState::Lost;pending_=state_;hasStateSince_=false;return;}
- ProximityState wanted;
- if(ema_>=cfg_.near)wanted=cfg_.found_enabled&&ema_>=cfg_.found?ProximityState::Found:ProximityState::Near;
- else if(ema_<cfg_.detected)wanted=ProximityState::Searching;
- else if(ema_-trendBase_>=cfg_.trend_db)wanted=ProximityState::Approaching;
- else if(ema_-trendBase_<=-cfg_.trend_db)wanted=ProximityState::MovingAway;
- else if(ema_>=cfg_.detected+8)wanted=ProximityState::Stable;
- else wanted=ProximityState::Detected;
- if(wanted==state_){pending_=wanted;hasStateSince_=false;return;}
- if(wanted!=pending_||!hasStateSince_){pending_=wanted;stateSince_=now;hasStateSince_=true;return;}
- uint32_t hold=wanted==ProximityState::Found?cfg_.found_hold_ms:cfg_.state_hold_ms;
- if(uint32_t(now-stateSince_)>=hold){state_=wanted;hasStateSince_=false;}
+
+void ProximityEngine::updateTrend(float delta) {
+  using State = ProximityState;
+  State wanted = State::Stable;
+  if (delta >= cfg_.trend_db || (trend_ == State::Approaching && delta >= cfg_.trend_exit_db))
+    wanted = State::Approaching;
+  else if (delta <= -cfg_.trend_db || (trend_ == State::MovingAway && delta <= -cfg_.trend_exit_db))
+    wanted = State::MovingAway;
+
+  if (wanted == trend_) {
+    pendingCount_ = 0;
+    return;
+  }
+  if (pending_ != wanted) {
+    pending_ = wanted;
+    pendingCount_ = 0;
+  }
+  if (++pendingCount_ >= cfg_.trend_samples) {
+    trend_ = wanted;
+    pendingCount_ = 0;
+  }
 }
-ProximitySnapshot ProximityEngine::snapshot(uint32_t now)const{ProximitySnapshot s{};s.seen=seen_;s.raw=raw_;s.median=median_;s.filtered=ema_;s.state=state_;s.age_ms=seen_?uint32_t(now-lastSample_):0;return s;}
-void ProximityEngine::reset(){count_=index_=0;seen_=hasStateSince_=false;raw_=median_=0;ema_=trendBase_=0;lastSample_=trendSince_=stateSince_=foundSince_=0;state_=pending_=ProximityState::Searching;}
+
+void ProximityEngine::updateQuality() {
+  const float weakExit = cfg_.weak + cfg_.hysteresis_db;
+  const float nearExit = cfg_.near - cfg_.hysteresis_db;
+  if (filtered_ >= cfg_.near || (quality_ == SignalQuality::Strong && filtered_ >= nearExit))
+    quality_ = SignalQuality::Strong;
+  else if (filtered_ < cfg_.weak || (quality_ == SignalQuality::Weak && filtered_ < weakExit))
+    quality_ = SignalQuality::Weak;
+  else
+    quality_ = SignalQuality::Fair;
+}
+
+ProximitySnapshot ProximityEngine::snapshot(uint32_t now) const {
+  ProximitySnapshot s;
+  s.seen = seen_;
+  s.raw = raw_;
+  s.filtered = filtered_;
+  s.age_ms = seen_ ? now - lastSample_ : 0;
+  s.fresh = valid_ && s.age_ms < cfg_.stale_ms;
+  s.quality = s.fresh ? quality_ : SignalQuality::Unavailable;
+  if (found_) s.state = ProximityState::Found;
+  else if (!s.fresh) s.state = seen_ ? ProximityState::Lost : ProximityState::Searching;
+  else if (trend_ != ProximityState::Stable) s.state = trend_;
+  else if (quality_ == SignalQuality::Strong) s.state = ProximityState::Near;
+  else if (quality_ == SignalQuality::Weak) s.state = ProximityState::Weak;
+  else s.state = ProximityState::Stable;
+  return s;
+}
+
+bool ProximityEngine::confirmFound(uint32_t now) {
+  if (!snapshot(now).fresh) return false;
+  found_ = true;
+  return true;
+}
+
+void ProximityEngine::reset() {
+  *this = ProximityEngine(cfg_);
+}
+
+void ProximityEngine::setSuspended(bool suspended, uint32_t now) {
+  reset();
+  suspended_ = suspended;
+  resumedAt_ = now;
+  resumePending_ = !suspended;
+}

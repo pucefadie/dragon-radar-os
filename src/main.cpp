@@ -905,11 +905,14 @@ void loop() {
     const bool longPress = buttonConsumeLongPress();
     if (!g_standbyButton.shouldWake(powerButton.pressed,shortPress || longPress)) { delay(10); return; }
     g_standby = false;
+    beaconServiceSetProximitySuspended(false);
+    g_gestures = GestureManager();
     g_apps = AppManager();
     displaySetBrightness(settingsGet().brightness);
   } else if (g_standbyButton.shouldEnter(powerButton.pressed,powerButton.current_hold_ms,otaServiceActive())) {
     motorStop(); displaySetBrightness(0);
     g_standbyButton.entered(true); g_standby = true;
+    beaconServiceSetProximitySuspended(true);
     return;
   }
   sensorsUpdate();
@@ -929,7 +932,12 @@ void loop() {
   bool tap = false;
   g_touch_pressed = displayPollTouch(g_touch_x, g_touch_y, tap);
   GestureEvent gesture = g_gestures.update(g_touch_pressed, g_touch_x, g_touch_y, millis());
-  if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap && settingsGet().demo) appRadarApproach();
+  if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap) {
+    if (settingsGet().demo) appRadarApproach();
+    else if (gesture.x >= RADAR_FOUND_X && gesture.x < RADAR_FOUND_X + RADAR_FOUND_WIDTH &&
+             gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT)
+      beaconServiceConfirmOrRestartSearch();
+  }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Audiobookshelf && gesture.type == Gesture::Tap) {
     if (gesture.y >= 245 && gesture.y < 315) { if (gesture.x < 233) { if (audiobookshelfIsAuthenticated()) audiobookshelfLoadCatalog(); else audiobookshelfCheckServer(); } else audioServiceTestTone(); }
     else if (gesture.y >= 150 && gesture.y < 240 && audiobookshelfIsAuthenticated()) audiobookshelfSelectNext();
@@ -949,6 +957,7 @@ void loop() {
     displaySetBrightness(0);
     g_standbyButton.entered(buttonGetStatus().pressed);
     g_standby = true;
+    beaconServiceSetProximitySuspended(true);
     return;
   }
   if (appSettingsConsumeRestart() && !otaServiceUpdating()) ESP.restart();

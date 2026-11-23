@@ -72,9 +72,17 @@ class SecureEspNow final : private SecureRadioIo {
     Packet p;
     memcpy(p.source,info->src_addr,6);
     memcpy(p.bytes,bytes,sizeof(p.bytes));
+#if CONFIG_IDF_TARGET_ESP32S3
+    p.rssi=info->rx_ctrl ? info->rx_ctrl->rssi : 0;
+    p.received=millis();
+#endif
     if (xQueueSend(queue_,&p,0)!=pdTRUE) ++drop_;
   }
-  void tick(uint32_t now) {
+  void tick(uint32_t now
+#if CONFIG_IDF_TARGET_ESP32S3
+            , void (*observe)(SecureRxEvent, int8_t, uint32_t)=nullptr
+#endif
+  ) {
     if (!radio_) return;
     uint8_t primary=0; wifi_second_chan_t secondary{};
     aligned_=esp_wifi_get_channel(&primary,&secondary)==ESP_OK && primary==channel_;
@@ -82,7 +90,12 @@ class SecureEspNow final : private SecureRadioIo {
     for (unsigned n=0;n<8 && xQueueReceive(queue_,&p,0)==pdTRUE;++n) {
       if (aligned_) {
         ++rxProcessed_;
+#if CONFIG_IDF_TARGET_ESP32S3
+        const auto event=radio_->receive(p.source,p.bytes,sizeof(p.bytes),now);
+        if (observe && event!=SecureRxEvent::None) observe(event,p.rssi,p.received);
+#else
         radio_->receive(p.source,p.bytes,sizeof(p.bytes),now);
+#endif
       }
     }
     if (aligned_) radio_->tick(now);
@@ -124,7 +137,13 @@ class SecureEspNow final : private SecureRadioIo {
   }
 #endif
  private:
-  struct Packet { uint8_t source[6],bytes[SECURE_RADIO_SIZE]; };
+  struct Packet {
+    uint8_t source[6],bytes[SECURE_RADIO_SIZE];
+#if CONFIG_IDF_TARGET_ESP32S3
+    int8_t rssi;
+    uint32_t received;
+#endif
+  };
   static SecureRecordRead readRecord(void *storage,const char *key,uint8_t *bytes,size_t &length) {
     const nvs_handle_t handle=*static_cast<nvs_handle_t*>(storage);
     nvs_type_t type;

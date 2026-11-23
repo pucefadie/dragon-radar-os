@@ -31,6 +31,32 @@ const char *secureLinkLabel(SecureLinkStatus status) {
   return "";
 }
 
+const char *signalQualityLabel(SignalQuality quality) {
+  switch (quality) {
+    case SignalQuality::Weak: return "DEBOLE";
+    case SignalQuality::Fair: return "MEDIO";
+    case SignalQuality::Strong: return "FORTE";
+    case SignalQuality::Unavailable: return "--";
+  }
+  return "--";
+}
+
+const char *proximityLabel(const ProximitySnapshot &signal, SecureLinkStatus link) {
+  if (signal.state == ProximityState::Found) return "SFERA TROVATA";
+  if (link != SecureLinkStatus::Paired) return "SFERA NON COLLEGATA";
+  switch (signal.state) {
+    case ProximityState::Searching: return "ATTESA MISURA RSSI";
+    case ProximityState::Lost: return "MISURA RSSI SCADUTA";
+    case ProximityState::Weak: return "SEGNALE DEBOLE";
+    case ProximityState::Approaching: return "IN AVVICINAMENTO";
+    case ProximityState::MovingAway: return "IN ALLONTANAMENTO";
+    case ProximityState::Near: return "VICINANZA ELEVATA";
+    case ProximityState::Stable: return "SEGNALE STABILE";
+    case ProximityState::Found: return "SFERA TROVATA";
+  }
+  return "";
+}
+
 constexpr int16_t kCenterX = HW_LCD_WIDTH / 2;  // 233
 constexpr int16_t kCenterY = HW_LCD_HEIGHT / 2; // 233
 constexpr float kDegToRad = 0.017453292519943295f;
@@ -1475,20 +1501,37 @@ void displayRenderRadarApp(const RadarView &v) {
     else { d->fillCircle(x,y,7,RADAR_COLOR_YELLOW); d->drawCircle(x,y,10,RADAR_COLOR_AMBER); }
   }
   char text[48];
-  snprintf(text,sizeof(text),"%s  %um",v.demo ? "DEMO" : "REALE", v.range_m);
+  if (v.demo) snprintf(text,sizeof(text),"DEMO  %um",v.range_m);
+  else snprintf(text,sizeof(text),"CHIUSO  SFERA 1");
   drawCenteredText(d, 62, text, RADAR_COLOR_BG, 2);
   snprintf(text,sizeof(text),"%s %03.0f %s",v.heading_up?"HEAD":"NORD",v.heading,v.compass_calibrated?"CAL":"RAW");
   drawCenteredText(d, 88, text, RADAR_COLOR_BG, 1);
   if (!v.compass_online) drawCenteredText(d, 108, "BUSSOLA OFFLINE", RADAR_COLOR_RED, 1);
   else if (v.heading_held) drawCenteredText(d, 108, "BUSSOLA PAUSA MOTORE", RADAR_COLOR_YELLOW, 1);
   const auto link = beaconServiceSecureLinkStatus();
-  drawCenteredText(d, 333, secureLinkLabel(link),
-                   link == SecureLinkStatus::Paired ? RADAR_COLOR_BG : RADAR_COLOR_YELLOW, 2);
-  if (v.demo) { snprintf(text,sizeof(text),"SIMULATO: %.0f m",v.nearest_m); drawCenteredText(d, 373,text,RADAR_COLOR_BG,1); }
-  else {
-    snprintf(text,sizeof(text),"CH%u  BEACON RF %u/7",beaconServiceChannel(),beaconServiceFreshCount());
-    drawCenteredText(d, 353, text, RADAR_COLOR_YELLOW, 1);
-    drawCenteredText(d, 373, v.gps_valid ? "NESSUN TARGET REALE" : "GPS NO FIX / NO TARGET", RADAR_COLOR_YELLOW,1);
+  if (v.demo) {
+    drawCenteredText(d, 333, secureLinkLabel(link),
+                     link == SecureLinkStatus::Paired ? RADAR_COLOR_BG : RADAR_COLOR_YELLOW, 2);
+    snprintf(text,sizeof(text),"SIMULATO: %.0f m",v.nearest_m);
+    drawCenteredText(d, 373,text,RADAR_COLOR_BG,1);
+  } else {
+    const auto &signal = v.proximity;
+    const bool found = signal.state == ProximityState::Found;
+    const bool available = link == SecureLinkStatus::Paired && signal.fresh;
+    const unsigned level = available ? unsigned(signal.quality) : 0;
+    for (unsigned i = 0; i < 3; ++i)
+      d->drawCircle(233,233,43+16*i,i < level ? RADAR_COLOR_YELLOW : RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d, 324, proximityLabel(signal,link), RADAR_COLOR_YELLOW, 2);
+    if (available) {
+      snprintf(text,sizeof(text),"RSSI %s",signalQualityLabel(signal.quality));
+      drawCenteredText(d, 349,text,RADAR_COLOR_BG,1);
+    } else {
+      drawCenteredText(d, 349,secureLinkLabel(link),RADAR_COLOR_BG,1);
+    }
+    if (available || found) {
+      d->fillRoundRect(RADAR_FOUND_X,RADAR_FOUND_Y,RADAR_FOUND_WIDTH,RADAR_FOUND_HEIGHT,8,RADAR_COLOR_BG);
+      drawCenteredText(d, 388,found ? "NUOVA RICERCA" : "CONFERMA RITROVAMENTO",RADAR_COLOR_WHITE,2);
+    }
   }
   d->fillRoundRect(207, 432, 52, 5, 2, RADAR_COLOR_GRID_BRIGHT); flushDisplay();
 }
@@ -1562,7 +1605,7 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
   Arduino_GFX *d=getDrawTarget(); d->fillScreen(RADAR_COLOR_BG); d->drawCircle(233,233,222,RADAR_COLOR_GRID_MID);
   char heading[32]; snprintf(heading,sizeof(heading),"DEBUG %u/%u",(unsigned)(page%DEBUG_PAGE_COUNT)+1,(unsigned)DEBUG_PAGE_COUNT);
   drawCenteredText(d,65,heading,RADAR_COLOR_GRID_BRIGHT,2);
-  const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="";
+  const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="",detail[48]="";
   switch(page%DEBUG_PAGE_COUNT) {
     case 0: title="SISTEMA"; snprintf(a,sizeof(a),"BUSSOLA: %s",snap.bmm_online?"OK":"OFF"); snprintf(b,sizeof(b),"IMU: %s",snap.imu_online?"OK":"OFF"); snprintf(c,sizeof(c),"PMIC: %s",snap.pmic_online?"OK":"OFF"); break;
     case 1: title="BUSSOLA"; snprintf(a,sizeof(a),"HEADING %.0f",snap.heading_deg); snprintf(b,sizeof(b),"CAMPO %.1f uT",snap.mag_b_ut); snprintf(c,sizeof(c),"%s %s",snap.mag_calibrated?"CAL":"RAW",(snap.mag_b_ut>=15 && snap.mag_b_ut<=120)?"":"FUORI RANGE"); break;
@@ -1575,13 +1618,26 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
     case 8: title="TOUCH E TASTO"; snprintf(a,sizeof(a),"TOUCH %s",snap.touch_online?"OK":"OFF"); snprintf(b,sizeof(b),"XY %d %d",snap.touch_x,snap.touch_y); snprintf(c,sizeof(c),"TASTO %s",snap.btn_pressed?"PREMUTO":"RILASCIATO"); break;
     case 9: title="VIBRAZIONE"; snprintf(a,sizeof(a),"MOTORE %s",snap.motor_active?"ON":"OFF"); snprintf(b,sizeof(b),"IMPULSI %lu",(unsigned long)snap.motor_activations); snprintf(c,sizeof(c),"TIENI: TEST"); break;
     case 10: title="MEMORIA"; snprintf(a,sizeof(a),"RAM %lu KB",(unsigned long)(ESP.getFreeHeap()/1024)); snprintf(b,sizeof(b),"PSRAM %lu KB",(unsigned long)(ESP.getFreePsram()/1024)); snprintf(c,sizeof(c),"UPTIME %lu s",(unsigned long)(snap.uptime_ms/1000)); break;
-    case 11: title="WIFI E SFERE"; snprintf(a,sizeof(a),"WIFI %s",wifiServiceStatusText()); snprintf(b,sizeof(b),"RADIO CH %u",beaconServiceChannel()); snprintf(c,sizeof(c),"BEACON RF %u/7",beaconServiceFreshCount()); snprintf(e,sizeof(e),"%s",secureLinkLabel(beaconServiceSecureLinkStatus())); break;
+    case 11: {
+      title="WIFI E SFERE";
+      snprintf(a,sizeof(a),"WIFI %s CH %u",wifiServiceStatusText(),beaconServiceChannel());
+      snprintf(b,sizeof(b),"BEACON RF %u/7",beaconServiceFreshCount());
+      snprintf(c,sizeof(c),"%s",secureLinkLabel(beaconServiceSecureLinkStatus()));
+      const auto signal=beaconServiceProximity();
+      if (signal.seen) {
+        snprintf(e,sizeof(e),"RAW %d FILT %.1f dBm",int(signal.raw),double(signal.filtered));
+        snprintf(detail,sizeof(detail),"ETA %.1f s %s",double(signal.age_ms)/1000.0,
+                 signal.fresh ? signalQualityLabel(signal.quality) : "SCADUTO");
+      } else snprintf(e,sizeof(e),"ATTESA RSSI DRA1");
+      break;
+    }
   }
   drawCenteredText(d,120,title,RADAR_COLOR_GRID_BRIGHT,2);
   if(a[0]) drawCenteredText(d,165,a,RADAR_COLOR_WHITE,2);
   if(b[0]) drawCenteredText(d,205,b,RADAR_COLOR_WHITE,2);
   if(c[0]) drawCenteredText(d,245,c,RADAR_COLOR_WHITE,2);
   if(e[0]) drawCenteredText(d,285,e,RADAR_COLOR_YELLOW,2);
+  if(detail[0]) drawCenteredText(d,320,detail,RADAR_COLOR_WHITE,2);
   drawCenteredText(d,355,"TOCCA: PAGINA",RADAR_COLOR_GRAY,2);
   d->fillRoundRect(207,432,52,5,2,RADAR_COLOR_GRID_MID); flushDisplay();
 }

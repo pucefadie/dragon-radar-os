@@ -36,6 +36,13 @@ DevAdapter devAdapter; DevRadar *devRadar=nullptr;
 DevRadioTx secureTx;
 SecureEspNow secure(secureTx);
 bool secureReady=false;
+#if CONFIG_IDF_TARGET_ESP32S3
+ProximityEngine proximity;
+void observeProximity(SecureRxEvent event, int8_t rssi, uint32_t received) {
+  if (event==SecureRxEvent::SessionStarted) proximity.invalidate();
+  else if (event==SecureRxEvent::ProbeAck) proximity.sample(rssi,received,millis());
+}
+#endif
 void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { secureTx.completed(status); }
 #endif
 std::atomic<uint32_t> dropped{0}, callbacks{0}, badMetadata{0}, len34{0}, lenOther{0}, queued{0};
@@ -120,7 +127,16 @@ void beaconServiceUpdate() {
   devRadar->tick(millis());
   radioTx.tick();
 #elif !defined(RADIO_RX_HOST_TEST)
-  if (secureReady) { secure.tick(millis()); secureTx.tick(); }
+  if (secureReady) {
+    const uint32_t now=millis();
+#if CONFIG_IDF_TARGET_ESP32S3
+    secure.tick(now, observeProximity);
+    if (secure.linkStatus(now)!=SecureLinkStatus::Paired) proximity.invalidate();
+#else
+    secure.tick(now);
+#endif
+    secureTx.tick();
+  }
 #endif
 }
 uint8_t beaconServiceChannel() {
@@ -133,6 +149,28 @@ SecureLinkStatus beaconServiceSecureLinkStatus() {
   if (secureReady) return secure.linkStatus(millis());
 #endif
   return SecureLinkStatus::Unavailable;
+}
+ProximitySnapshot beaconServiceProximity() {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  return proximity.snapshot(millis());
+#else
+  return {};
+#endif
+}
+void beaconServiceSetProximitySuspended(bool suspended) {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  proximity.setSuspended(suspended,millis());
+#else
+  (void)suspended;
+#endif
+}
+void beaconServiceConfirmOrRestartSearch() {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  const uint32_t now=millis();
+  if (proximity.snapshot(now).state==ProximityState::Found) proximity.reset();
+  else if (beaconServiceSecureLinkStatus()==SecureLinkStatus::Paired)
+    proximity.confirmFound(now);
+#endif
 }
 #if M1C_BENCH_FIXTURE
 bool beaconServiceFixtureCommand(const char *command, Stream &out) {
@@ -174,6 +212,13 @@ void beaconServicePrint(Stream &out) {
   }
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   secure.print(out,millis());
+#if CONFIG_IDF_TARGET_ESP32S3
+  const auto signal=beaconServiceProximity();
+  if (signal.seen)
+    out.printf("DRA1_RSSI_RAW=%d DRA1_RSSI_FILTERED=%.1f DRA1_RSSI_AGE_MS=%lu DRA1_RSSI_FRESH=%d DRA1_RSSI_QUALITY=%u\n",
+               int(signal.raw),double(signal.filtered),(unsigned long)signal.age_ms,signal.fresh,unsigned(signal.quality));
+  else out.println("DRA1_RSSI_FRESH=0 DRA1_RSSI_QUALITY=0");
+#endif
 #endif
   out.println("[BEACON] RSSI non fornisce distanza o direzione; nessuna localizzazione reale.");
 }

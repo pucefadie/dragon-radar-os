@@ -190,30 +190,30 @@ void SecureRadio::tick(uint32_t now) {
     ++diagnostics_.probe_retry_queued;
   }
 }
-void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint32_t now) {
+SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint32_t now) {
   if (!source || !b || len!=SECURE_RADIO_SIZE || !equal(source,config_.peer,6) ||
-      std::memcmp(b,"DRA1",4) || b[5]!=(controller_?1:0) || b[6]!=(controller_?0:1) || b[7]) return;
+      std::memcmp(b,"DRA1",4) || b[5]!=(controller_?1:0) || b[6]!=(controller_?0:1) || b[7]) return SecureRxEvent::None;
   const Kind kind=Kind(b[4]);
   const uint32_t seq=get32(b+8), ack=get32(b+12);
   Nonces nonce{};
   std::memcpy(nonce.a,b+16,16); std::memcpy(nonce.b,b+32,16);
-  if (!nonzero(nonce.a,16) || (nonzero(nonce.b,16)==(kind==Kind::Hello))) return;
-  if (kind==Kind::Probe ? (!seq || ack) : kind==Kind::Ack ? (seq || !ack) : (seq || ack)) return;
+  if (!nonzero(nonce.a,16) || (nonzero(nonce.b,16)==(kind==Kind::Hello))) return SecureRxEvent::None;
+  if (kind==Kind::Probe ? (!seq || ack) : kind==Kind::Ack ? (seq || !ack) : (seq || ack)) return SecureRxEvent::None;
   uint8_t tag[32];
-  if (!io_.sign(config_.auth,b,48,tag)) return;
+  if (!io_.sign(config_.auth,b,48,tag)) return SecureRxEvent::None;
   if (!equal(tag,b+48,sizeof(tag))) {
     ++diagnostics_.auth_rejected;
-    return;
+    return SecureRxEvent::None;
   }
   const bool current=equal(nonce.a,current_.a,16) && equal(nonce.b,current_.b,16);
   if (!current && online_ && (controller_ ? kind==Kind::Ack : kind==Kind::Probe)) {
     ++diagnostics_.stale_session;
-    return;
+    return SecureRxEvent::None;
   }
   if (controller_) {
     const bool freshAttempt=attempting_ && now-started_<handshakeMs;
     if (kind==Kind::Challenge && freshAttempt && equal(nonce.a,current_.a,16)) {
-      if (challenged_ && !current) return;
+      if (challenged_ && !current) return SecureRxEvent::None;
       if (!challenged_) {
         current_=nonce;
         challenged_=true;
@@ -221,12 +221,13 @@ void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint
       }
     } else if (kind==Kind::Ready && freshAttempt && challenged_ && current) {
       established(now);
+      return SecureRxEvent::SessionStarted;
     } else if (kind==Kind::Ack && online_ && current && peers_.state(1,now)==LinkState::Paired) {
 #if M1C_BENCH_FIXTURE
       if (benchAction_==M1cRadioAction::DropAck && ack_.pending() && ack==seq_) {
         ++benchResult_.ack_dropped;
         benchAction_=M1cRadioAction::None;
-        return;
+        return SecureRxEvent::None;
       }
 #endif
       RadioFrame result{};
@@ -235,12 +236,13 @@ void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint
       if (ack_.acknowledge(source,result,true)) {
         peers_.markAuthenticatedRx(1,source,handle,now,true);
         ++confirmations_;
+        return SecureRxEvent::ProbeAck;
       }
     }
-    return;
+    return SecureRxEvent::None;
   }
   if (kind==Kind::Hello) {
-    if (online_ && equal(nonce.a,current_.a,16)) return;
+    if (online_ && equal(nonce.a,current_.a,16)) return SecureRxEvent::None;
     if (!pendingValid_ || now-pendingAt_>=handshakeMs) {
       pending_=nonce;
       io_.random(pending_.b,16);
@@ -269,4 +271,5 @@ void SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint
     // Retransmit exactly the last diagnostic acknowledgment; never refresh on duplicate.
     if (seq==lastProbe_) emit(Kind::Ack,current_,0,seq);
   }
+  return SecureRxEvent::None;
 }
