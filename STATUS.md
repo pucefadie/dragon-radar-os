@@ -32,9 +32,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Dopo autorizzazione per il nuovo hash UI Trial offline, riconfermare in ROM identità, OTA1 e backup correnti del radar. Installare e rileggere solo OTA1.
-2. Verificare via seriale STA senza AP, canale effettivo 6 e 60 s DRA1 Paired con il C6 M1d. Alimentare solo via USB con batteria e attuatori scollegati.
-3. Confrontare DRC1, assenza di DRC2, NVS logica e otadata dopo l'avvio. Completare la verifica visiva di display e touch.
+1. Verificare in M2a il percorso che ha salvato `radar_os/brightness` durante il collaudo offline. Il radar resta in ROM con il nuovo UI Trial installato.
+2. Alla prossima sessione autorizzata, confermare il C6 M1d in esecuzione normale sul canale 6 e ripetere la prova DRA1 da 60 s e la verifica di perdita e recupero.
+3. Ripetere il confronto logico NVS e completare la verifica visiva di display e touch.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -186,3 +186,11 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS host** profili standard e Trial, conservazione credenziali simulate, canale 6 e un secondo canale parametrico, rifiuto del cambio con AP associato, rilettura canale errata e fallimento della selezione RAM. Il test standard copre salvataggio esplicito, connessione, scollegamento e retry. Passati ASan/UBSan sul profilo Trial e il test regressione della callback beacon.
 - **PASS build e verifica** `RADAR_UI_TRIAL=1 scripts/build_linux.sh <directory-nuova>` con Arduino ESP32 3.3.12. Verificati formato, checksum, hash d'immagine, tabella rispetto al backup e chiamate effettive nell'ELF per storage RAM, canale e guard NVS. Candidato da 1.772.704 byte, SHA-256 `717ff2da669e39b88c15faf17a5c5df8d53f68122cc760fdc2a3e123405652b4`, OTA1 `0x310000`, settori interessati fino a `0x4c0fff`.
 - **NOT RUN** flash, reset, prova DRA1 60 s e confronto della NVS post-avvio sul nuovo candidato. Il confronto fisico deve confermare DRC1 identico, assenza di DRC2 e sole eventuali differenze PHY.
+
+### M2a — prova fisica del candidato offline
+
+- **PASS programmazione e readback** COM11 confermata in ROM. Copia corrente integrale di OTA1 da 3 MiB acquisita e confrontata con la ricostruzione dal readback precedente. Scritto solo il candidato da 1.772.704 byte in OTA1 a `0x310000`, con ultimo settore fino a `0x4c0fff`. Rilettura identica byte per byte e SHA-256 confermato.
+- **PASS avvio e radio offline** console stabile per 70 s, canale 6, STA senza AP, zero connessioni o disconnessioni STA. Il firmware riporta AMOLED e controller touch inizializzati, batteria scollegata e motore SafeOff. Immagine visibile e risposta ai tocchi **NOT RUN**.
+- **BLOCCATO DRA1 Paired e recupero** DRC1 caricato, PMK e peer inizializzati, `aligned=1 state=2 confirmed=0`. Il radar ha registrato 133 invii con consegna fallita e zero callback DRA1 RX. Nessuna telemetria applicativa dalla lettura passiva del C6. Il collegamento richiede il C6 operativo sul canale 6. Il C6 non è stato riavviato né programmato.
+- **FAIL vincolo NVS post-avvio** due letture ROM identiche. DRC1 coincide con il backup, DRC2 assente e metadati STA invariati rispetto a prima del flash. Cambiati cinque record logici PHY e il valore `radar_os/brightness`. Il valore della luminosità è fuori dalle variazioni ammesse. La causa della modifica durante la sessione resta da verificare.
+- **PASS integrità** bootloader, tabella, OTA0, `otadata` e immagine OTA1 verificati dopo l'avvio. Fine prova con S3 in ROM, senza ulteriori avvii o rollback. Backup e log conservati fuori da Git.
