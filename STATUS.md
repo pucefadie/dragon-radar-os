@@ -8,7 +8,8 @@
 | **PASS — preparazione M1c** | Rieseguiti otto test C++ e il test del generatore con record sintetici. Verificati hash dei sei binari M1b, coppie dei backup integrali S3/C6, layout e fit delle immagini app per il banco. Bootstrap S3 storico con rollback attivo. Build C6 standard e provisioning `no_ota` riuscite e corrispondenti alla tabella C6 archiviata. |
 | **FAIL — profilo C6 M1b rispetto alla scheda** | Le immagini C6 M1b erano valide per il proprio profilo a due slot, ma quella tabella non corrisponde a quella archiviata per il C6 fisico. Usare solo i nuovi candidati app C6 `no_ota`, previa verifica corrente. |
 | **PASS storico — DRB2 fisico, solo ricezione** | Ricevitore S3 minimale: 10 beacon validi confermati sul canale 6, senza errori CRC nei report completi, NVS immutata. Al termine OTA1 selezionato con sequenza 4 VALID, OTA0 integro. Non è una prova DRA1. |
-| **PASS — M1c fisico, profilo banco** | Provisioning e DRA1 verificati su S3/C6 con PMK comune derivata. Handshake, ACK/retry, tag errato, replay, perdita e recupero verificati. L'evidenza fisica M1d e la cattura indipendente CCMP restano aperte. |
+| **PASS — M1c fisico, profilo banco** | Provisioning e DRA1 verificati su S3/C6 con PMK comune derivata. Handshake, ACK/retry, tag errato, replay, perdita e recupero verificati. |
+| **COMPLETATA — M1d, DRC1** | Percorso radio standard nel profilo di banco, 60 s Paired sul canale 6, 20 nuove conferme applicative per scheda. Recupero dopo entrambi i riavvii e associazioni DRC1 identiche dopo la prova. |
 
 ## Audit storico S3 con batteria e motore collegati
 
@@ -31,9 +32,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Autorizzare il primo collaudo M1d con i DRC1 esistenti, percorso DRA1 standard nelle due immagini radio di banco. Acquisire backup correnti e scrivere solo OTA1 S3 e app0 C6.
-2. Verificare in una sessione separata il provisioning coordinato DRC2 via USB, la selezione `record_version=2` e gli stessi casi DRA1. Conservare le impostazioni e i backup pre-installazione.
-3. Acquisire un'osservazione radio indipendente di CCMP e verificare il ritorno al firmware precedente. Rivalutare alimentazione e attuatori se cambia il banco.
+1. Collegare display e interfaccia del firmware radar completo allo stato del servizio DRA1 già condiviso. Mostrare Paired e Lost dalla sessione autenticata per l'ID 1. Lasciare credenziali, provisioning e C6 invariati.
+2. Verificare offline la transizione di stato della UI, il disallineamento di canale e le build S3 standard e di banco. La radio usa il canale effettivo della STA mentre è associata all'AP.
+3. Preparare una prova separata del radar completo in OTA1, dopo autorizzazione, con display e touch e attuatori isolati. Ripetere handshake, conferme e recupero sul C6 M1d esistente. Rinviare DRC2 live e cattura CCMP a fasi dedicate.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -117,7 +118,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 - **PASS implementazione** DRC2 con una PMK casuale comune al dominio e LMK/HMAC distinte per coppia. Il parser preferisce DRC2 e rifiuta un valore invalido presente. Solo in assenza di DRC2 legge DRC1. La derivazione DRC1 in RAM usa il contesto del banco riuscito. Firmware e utilità non riscrivono DRC1. L'utility separata aggiunge DRC2 solo se assente. Il flag sperimentale è stato rimosso dalle build.
 - **PASS host** nove gruppi esistenti, suite DRA1 standard e fixture con ASan/UBSan, utility USB in cinque scenari con e senza sanitizzatori. Coperti precedenza e fallimento DRC2, compatibilità DRC1, HMAC con chiave errata, ACK, retry, duplicati, replay e riavvio. I test host non esercitano la radio CCMP.
 - **PASS recupero offline** due backup originali S3 da 16 MiB, due snapshot pre-M1c C6 da 4 MiB e hash dei readback applicativi del collaudo M1c riverificati. Prima di una futura scrittura servono due nuove catture delle regioni live. Il recupero dell'app C6 passa da ROM e dallo stesso slot.
-- **NOT RUN hardware M1d** nessun contatto con le schede in questa fase. I PASS fisici sopra sono del checkpoint M1c. Restano collaudo DRC1 con i nuovi firmware radio standard, prova coordinata DRC2, ritorno fisico e cattura CCMP. Il profilo standard di prodotto S3, con UI e periferiche, richiede una prova distinta da quella del percorso radio protetto.
+- **PASS installazione M1d** doppio backup corrente per entrambe le schede. Installati e riletti byte per byte il solo candidato S3 banco in OTA1 a `0x310000` e il C6 radio in app0 a `0x10000`. OTA0 originale preservato, OTA1 ancora selezionato con seq 4 VALID e otadata invariato. I backup e i log restano privati.
+- **PASS DRA1 fisico con DRC1** entrambi i dispositivi Paired 60 s sul canale 6 con PMK e peer inizializzati. Conferme S3 21 → 41 e C6 66 → 86, zero nuovi retry, drop RX o stalli TX nel campione.
+- **PASS recupero fisico** C6 in ROM ha portato il radar a Lost. Al ritorno del C6, conferme S3 90 → 92 e C6 2 → 4. Dopo il riavvio separato S3, contatore radar ripartito da 92 a 7, con conferme S3 7 → 9 e C6 14 → 16. Nessun nuovo rifiuto di autenticazione, drop o stallo TX nei campioni di recupero. La seriale USB Windows ha richiesto una nuova apertura dopo il reset, con conferma del recupero lato applicazione.
+- **PASS NVS dopo le prove** due letture identiche per scheda e CRC validi. I DRC1 coincidono byte per byte con i backup e con i record di banco, DRC2 assente. Le immagini NVS grezze differiscono da quelle di pre-installazione. Le sole differenze logiche sono quattro voci PHY sul S3 e una sul C6. Otadata invariato su entrambe le schede, entrambe tornate Paired dopo la lettura.
+- **NOT RUN** provisioning DRC2 su hardware, rollback fisico, cattura indipendente CCMP e prova del radar completo con UI e periferiche.
 
 ### Build M1d verificate
 
