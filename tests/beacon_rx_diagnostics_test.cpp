@@ -60,6 +60,8 @@ int main() {
   expect("RX_ID_OK", 1);
   expect("RX_BEACON_DECODED", 1);
   expect("RX_REGISTRY_ACCEPTED", 1);
+  assert(beaconServiceFreshCount() == 1);
+  assert(beaconServiceSecureLinkStatus() == SecureLinkStatus::Unavailable);
 
   deliver(info);
   deliver(conflictInfo);

@@ -20,6 +20,17 @@
 
 namespace {
 
+const char *secureLinkLabel(SecureLinkStatus status) {
+  switch (status) {
+    case SecureLinkStatus::Paired: return "SFERA 1 AUTENTICATA";
+    case SecureLinkStatus::Lost: return "SFERA 1 LINK PERSO";
+    case SecureLinkStatus::AwaitingHandshake: return "SFERA 1 ATTESA HANDSHAKE";
+    case SecureLinkStatus::ChannelMismatch: return "CANALE RF NON ALLINEATO";
+    case SecureLinkStatus::Unavailable: return "RADIO SICURA NON ATTIVA";
+  }
+  return "";
+}
+
 constexpr int16_t kCenterX = HW_LCD_WIDTH / 2;  // 233
 constexpr int16_t kCenterY = HW_LCD_HEIGHT / 2; // 233
 constexpr float kDegToRad = 0.017453292519943295f;
@@ -1470,9 +1481,12 @@ void displayRenderRadarApp(const RadarView &v) {
   drawCenteredText(d, 88, text, RADAR_COLOR_BG, 1);
   if (!v.compass_online) drawCenteredText(d, 108, "BUSSOLA OFFLINE", RADAR_COLOR_RED, 1);
   else if (v.heading_held) drawCenteredText(d, 108, "BUSSOLA PAUSA MOTORE", RADAR_COLOR_YELLOW, 1);
+  const auto link = beaconServiceSecureLinkStatus();
+  drawCenteredText(d, 333, secureLinkLabel(link),
+                   link == SecureLinkStatus::Paired ? RADAR_COLOR_BG : RADAR_COLOR_YELLOW, 2);
   if (v.demo) { snprintf(text,sizeof(text),"SIMULATO: %.0f m",v.nearest_m); drawCenteredText(d, 373,text,RADAR_COLOR_BG,1); }
   else {
-    snprintf(text,sizeof(text),"RF CH%u %u/7 NON LOCALIZZ",beaconServiceChannel(),beaconServiceFreshCount());
+    snprintf(text,sizeof(text),"CH%u  BEACON RF %u/7",beaconServiceChannel(),beaconServiceFreshCount());
     drawCenteredText(d, 353, text, RADAR_COLOR_YELLOW, 1);
     drawCenteredText(d, 373, v.gps_valid ? "NESSUN TARGET REALE" : "GPS NO FIX / NO TARGET", RADAR_COLOR_YELLOW,1);
   }
@@ -1561,7 +1575,7 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
     case 8: title="TOUCH E TASTO"; snprintf(a,sizeof(a),"TOUCH %s",snap.touch_online?"OK":"OFF"); snprintf(b,sizeof(b),"XY %d %d",snap.touch_x,snap.touch_y); snprintf(c,sizeof(c),"TASTO %s",snap.btn_pressed?"PREMUTO":"RILASCIATO"); break;
     case 9: title="VIBRAZIONE"; snprintf(a,sizeof(a),"MOTORE %s",snap.motor_active?"ON":"OFF"); snprintf(b,sizeof(b),"IMPULSI %lu",(unsigned long)snap.motor_activations); snprintf(c,sizeof(c),"TIENI: TEST"); break;
     case 10: title="MEMORIA"; snprintf(a,sizeof(a),"RAM %lu KB",(unsigned long)(ESP.getFreeHeap()/1024)); snprintf(b,sizeof(b),"PSRAM %lu KB",(unsigned long)(ESP.getFreePsram()/1024)); snprintf(c,sizeof(c),"UPTIME %lu s",(unsigned long)(snap.uptime_ms/1000)); break;
-    case 11: title="WIFI E SFERE"; snprintf(a,sizeof(a),"WIFI %s",wifiServiceStatusText()); snprintf(b,sizeof(b),"RADIO CH %u",beaconServiceChannel()); snprintf(c,sizeof(c),"SFERE RF %u/7",beaconServiceFreshCount()); snprintf(e,sizeof(e),"NON LOCALIZZATE"); break;
+    case 11: title="WIFI E SFERE"; snprintf(a,sizeof(a),"WIFI %s",wifiServiceStatusText()); snprintf(b,sizeof(b),"RADIO CH %u",beaconServiceChannel()); snprintf(c,sizeof(c),"BEACON RF %u/7",beaconServiceFreshCount()); snprintf(e,sizeof(e),"%s",secureLinkLabel(beaconServiceSecureLinkStatus())); break;
   }
   drawCenteredText(d,120,title,RADAR_COLOR_GRID_BRIGHT,2);
   if(a[0]) drawCenteredText(d,165,a,RADAR_COLOR_WHITE,2);

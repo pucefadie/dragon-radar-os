@@ -86,6 +86,9 @@ class SecureEspNow final : private SecureRadioIo {
     }
     if (aligned_) radio_->tick(now);
   }
+  SecureLinkStatus linkStatus(uint32_t now) const {
+    return radio_ ? radio_->linkStatus(now, aligned_) : SecureLinkStatus::Unavailable;
+  }
   void print(Stream &out,uint32_t now) const {
     const SecureRadioDiagnostics diagnostics=radio_?radio_->diagnostics():SecureRadioDiagnostics{};
     out.printf("[SECURE RADIO] configured=%d aligned=%d state=%u confirmed=%lu rx_drop=%lu tx_stalled=%d"

@@ -32,9 +32,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Collegare display e interfaccia del firmware radar completo allo stato del servizio DRA1 già condiviso. Mostrare Paired e Lost dalla sessione autenticata per l'ID 1. Lasciare credenziali, provisioning e C6 invariati.
-2. Verificare offline la transizione di stato della UI, il disallineamento di canale e le build S3 standard e di banco. La radio usa il canale effettivo della STA mentre è associata all'AP.
-3. Preparare una prova separata del radar completo in OTA1, dopo autorizzazione, con display e touch e attuatori isolati. Ripetere handshake, conferme e recupero sul C6 M1d esistente. Rinviare DRC2 live e cattura CCMP a fasi dedicate.
+1. Dopo autorizzazione separata, verificare in ROM le doppie letture correnti di OTA1, NVS e otadata e confermare OTA0 originale.
+2. Usare solo OTA1 per il candidato S3 UI Trial, rileggere l'immagine dopo la programmazione e tenere la copia corrente M1d di OTA1 per un eventuale recupero autorizzato. Il C6 mantiene l'applicazione M1d installata.
+3. Collaudare display, touch e recupero con alimentazione solo USB e attuatori isolati. Verificare il canale reale prima di interpretare il link. DRC2 su hardware e cattura CCMP rimangono prove separate.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -139,3 +139,14 @@ Nove build **PASS** con Arduino ESP32 3.3.12. S3 compilato su Linux, C6 su Windo
 | c6-provision | 245312 | `a4b8ea25bc2f4b609a586e297386cdf441b67f797e1298fe7f771ef3cbd455f5` | `0x10000–0x4bfff` |
 | c6-standard | 972416 | `11ca28197d34723d44da45de2aff5f76e79c90edd2d337f2d97462af32404acb` | `0x10000–0xfdfff` |
 | c6-dev | 967504 | `23d80357563bd9bbc7fb9379bad6c12fb2e927e489274eb01c0c6a1f06ae2914` | `0x10000–0xfcfff` |
+
+## Integrazione DRA1 nel radar completo
+
+- **PASS host** il servizio espone lo stato DRA1 con perdita, attesa handshake e disallineamento distinti. Verificati l'attesa fino a READY autenticato, il rifiuto di un tag errato, la perdita, il recupero, il riavvio e l'indipendenza dai beacon DRB2. La UI usa il servizio già in esecuzione nel loop S3.
+- **PASS profilo S3 UI Trial** `RADAR_UI_TRIAL=1 scripts/build_linux.sh <directory-nuova>` compila display e touch con DRA1 standard. Un errore di inizializzazione NVS ferma l'avvio prima del core Arduino. La build intercetta anche la cancellazione integrale della partizione NVS richiesta dal core in caso di esaurimento pagine o versione incompatibile. Test host del guard e verifica delle chiamate effettive nell'ELF passati. La normale manutenzione NVS e gli aggiornamenti dei dati PHY possono avvenire durante l'avvio autorizzato.
+- **PASS sei build** Arduino ESP32 3.3.12. S3 standard, DEV e UI Trial con `scripts/build_linux.sh`, banco con `scripts/build_m1c_bench.sh`. C6 standard e DEV con `scripts/build_beacon.sh 1 6 esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota,CDCOnBoot=cdc` dallo sketch tracciato. Verificati checksum e hash d'immagine, target, tabella rispetto ai backup, ingombro e separazione dei profili. Passati anche ASan/UBSan su DRA1 standard e fixture e i cinque casi dell'utility USB.
+- **NOT RUN prova fisica UI** dopo un futuro avvio autorizzato, aprire Radar e Debug → Wi-Fi e sfere. Verificare dal comando `beacons` il canale reale e il record DRC1. Sul canale 6 attendere `SFERA 1 AUTENTICATA` e 60 s di conferme in crescita, interrompere temporaneamente il C6 e osservare `SFERA 1 LINK PERSO` dopo la scadenza. Al ritorno controllare nuovo handshake, conferme e ripristino della dicitura. Con l'AP su un altro canale controllare `CANALE RF NON ALLINEATO`. Il firmware usa il canale effettivo e non cambia l'AP né forza il canale della STA. Verificare infine che DRC1 e otadata coincidano con le letture precedenti.
+
+| Candidato per il collaudo UI | Byte | SHA-256 | Intervallo massimo di erase dell'app |
+|---|---:|---|---|
+| S3 UI Trial, app OTA1 | 1784096 | `0ee789eb49cc277548a1786665e4294a7c0eed233c18e95aadb8d35553a9b073` | `0x310000–0x4c3fff` |

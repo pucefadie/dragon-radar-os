@@ -140,6 +140,20 @@ bool SecureRadio::benchSendProbe(uint8_t *frame, uint8_t length) {
 }
 #endif
 
+SecureLinkStatus SecureRadio::linkStatus(uint32_t now, bool channelAligned) const {
+  if (!channelAligned) return SecureLinkStatus::ChannelMismatch;
+  switch (state(now)) {
+    case LinkState::Paired:
+      return online_ ? SecureLinkStatus::Paired : SecureLinkStatus::AwaitingHandshake;
+    case LinkState::Lost:
+      return SecureLinkStatus::Lost;
+    case LinkState::AwaitingAuthenticatedSession:
+      return SecureLinkStatus::AwaitingHandshake;
+    default:
+      return SecureLinkStatus::Unavailable;
+  }
+}
+
 void SecureRadio::tick(uint32_t now) {
   if (!controller_) return;
   if (online_ && peers_.state(1,now)!=LinkState::Paired) online_=false;

@@ -23,13 +23,14 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Registrare sul banco S3↔C6 l'handshake autenticato, gli ACK, il canale effettivo, RSSI, perdite, retry e recupero. Usare i contatori DRA1 e una fixture approvata per i casi negativi mirati.
 - Chiudere M1 solo con evidenza fisica e criteri sicurezza verificati. **PR #2 rimane draft e non va mergiata automaticamente.**
 
-**M1d configurazione PMK standard — PASS offline, collaudo fisico in attesa di autorizzazione.**
+**M1d configurazione PMK standard — completata sul banco con DRC1.**
 
 - DRC2 con PMK casuale per dominio e LMK/HMAC per coppia. Lettura DRC1 compatibile con il banco senza scrivere NVS. Priorità DRC2 senza downgrade su errori.
-- Primo collaudo autorizzato del percorso standard con DRC1 esistente e immagini senza DEV/fixture. Colloquio DRC2 dopo provisioning coordinato, cattura CCMP indipendente e ripristino effettivo da ROM ancora da verificare.
+- Il percorso radio standard con DRC1 esistente ha superato handshake, conferme applicative e recupero dopo il riavvio di ciascuna scheda. Il collaudo DRC2, la cattura CCMP indipendente e il ripristino effettivo da ROM restano da verificare.
 - L'estensione a ID 1–7 conserverà un solo valore PMK per radio e una configurazione separata per peer. Il limite software corrente è ID 1.
 
 ## M2 — Esperienza radar (successiva a M1)
+- Primo passo: mostrare nel Radar e in Debug lo stato DRA1 della sfera ID 1 già provisionata. Verificare display, touch, allineamento di canale e recupero con un collaudo dedicato del firmware S3 completo in OTA1.
 - UI e launcher bottom-up con modalità Radar / Audiobookshelf / Impostazioni / Debug.
 - Modalità Aperto GPS+ESP-NOW e Chiuso solo ESP-NOW; progressione prossimità con smoothing/isteresi RSSI e soglie per modalità.
 - Non convertire RSSI in metri o direzione; ritrovamento sotto circa 30 cm deciso visivamente. Bussola serve orientamento interfaccia, non triangolazione RSSI. Fix GPS e log posizione sono opzionali in modalità Chiuso.

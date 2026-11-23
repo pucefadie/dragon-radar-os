@@ -120,6 +120,13 @@ uint8_t beaconServiceChannel() {
   uint8_t channel=0; wifi_second_chan_t secondary=WIFI_SECOND_CHAN_NONE;
   return esp_wifi_get_channel(&channel,&secondary)==ESP_OK ? channel : 0;
 }
+
+SecureLinkStatus beaconServiceSecureLinkStatus() {
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) return secure.linkStatus(millis());
+#endif
+  return SecureLinkStatus::Unavailable;
+}
 #if M1C_BENCH_FIXTURE
 bool beaconServiceFixtureCommand(const char *command, Stream &out) {
   M1cRadioAction action=M1cRadioAction::None;

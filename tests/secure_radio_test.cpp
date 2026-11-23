@@ -120,6 +120,7 @@ static void testRecords() {
   receiver.receive(source,hello.data(),hello.size(),1);
   assert(receiverWire.queue.empty() && receiver.diagnostics().auth_rejected==1);
   assert(receiver.state(1)==LinkState::AwaitingAuthenticatedSession);
+  assert(receiver.linkStatus(1,true)==SecureLinkStatus::AwaitingHandshake);
 }
 
 #if M1C_BENCH_FIXTURE
@@ -223,12 +224,15 @@ int main() {
   Frame ready=sphereWire.take();
   assert(sphere.state(3)==LinkState::Paired);
   assert(radar.state(3)==LinkState::AwaitingAuthenticatedSession);
+  assert(radar.linkStatus(3,true)==SecureLinkStatus::AwaitingHandshake);
   radar.tick(452); // retry FINISH if READY was lost
   assert(radarWire.take()==finish);
   toSphere(finish,453);
   assert(sphereWire.take()==ready);
   toRadar(ready,454);
   assert(radar.state(454)==LinkState::Paired);
+  assert(radar.linkStatus(454,true)==SecureLinkStatus::Paired);
+  assert(radar.linkStatus(454,false)==SecureLinkStatus::ChannelMismatch);
   radar.tick(454);
   Frame probe=radarWire.take();
   toSphere(probe,455);
@@ -268,6 +272,8 @@ int main() {
   toRadar(challenge,16001);
   toRadar(ready,16002);
   assert(radar.state(16002)==LinkState::Lost);
+  assert(radar.linkStatus(16002,true)==SecureLinkStatus::Lost);
+  assert(radar.linkStatus(16002,false)==SecureLinkStatus::ChannelMismatch);
   rebooted.receive(radarMac,nextHello.data(),nextHello.size(),16003);
   toRadar(rebootWire.take(),16004);
   radar.tick(16004);
@@ -275,6 +281,7 @@ int main() {
   rebooted.receive(radarMac,nextFinish.data(),nextFinish.size(),16005);
   toRadar(rebootWire.take(),16006);
   assert(radar.state(16006)==LinkState::Paired);
+  assert(radar.linkStatus(16006,true)==SecureLinkStatus::Paired);
   toRadar(ack,16006);
   assert(radar.confirmations()==1);
   assert(radar.diagnostics().stale_session==1);
@@ -285,6 +292,7 @@ int main() {
   // Restart the radar while the sphere is still paired, then exchange a new probe.
   Wire restartedRadarWire(110);
   SecureRadio restartedRadar(restartedRadarWire,true,rc);
+  assert(restartedRadar.linkStatus(16010,true)==SecureLinkStatus::AwaitingHandshake);
   restartedRadar.tick(16010);
   Frame restartHello=restartedRadarWire.take();
   rebooted.receive(radarMac,restartHello.data(),restartHello.size(),16011);

@@ -14,6 +14,7 @@ constexpr char SECURE_RECORD_V1_KEY[] = "peer_v1";
 constexpr char SECURE_RECORD_V2_KEY[] = "peer_v2";
 
 enum class SecureRecordVersion : uint8_t { None, V1, V2 };
+enum class SecureLinkStatus : uint8_t { Unavailable, AwaitingHandshake, Paired, Lost, ChannelMismatch };
 enum class SecureRecordRead { Missing, Loaded, Error };
 using SecureRecordReader = SecureRecordRead (*)(void *, const char *, uint8_t *, size_t &);
 
@@ -59,6 +60,7 @@ class SecureRadio {
   void tick(uint32_t now);
   void receive(const uint8_t *source, const uint8_t *bytes, size_t length, uint32_t now);
   LinkState state(uint32_t now) const { return peers_.state(1, now); }
+  SecureLinkStatus linkStatus(uint32_t now, bool channelAligned) const;
   uint32_t confirmations() const { return confirmations_; }
   const SecureRadioDiagnostics &diagnostics() const { return diagnostics_; }
 #if M1C_BENCH_FIXTURE

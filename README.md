@@ -2,7 +2,7 @@
 
 Questo repository GitHub è uno **snapshot pulito della v0.3**. La cronologia diagnostica completa, i log di collaudo e i backup del dispositivo restano conservati soltanto nel repository locale originale.
 
-Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. Il banco M1c ha verificato DRA1 sul canale 6. M1d porta la compatibilità con i DRC1 installati nel firmware standard e aggiunge DRC2 con PMK casuale condivisa. Il collaudo fisico M1d resta da eseguire. Non interpretare RSSI come distanza o direzione.
+Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. M1d ha verificato sul banco il percorso radio standard con DRC1, sul canale 6, anche dopo il riavvio di ciascuna scheda. Il firmware supporta anche DRC2 con PMK casuale condivisa. Le schermate Radar e Debug mostrano lo stato della sessione DRA1. Il collaudo con display e touch resta da eseguire. Non interpretare RSSI come distanza o direzione.
 
 [Stato e verifiche](STATUS.md) · [Procedura M1c](M1C_BENCH_TEST.md) · [Piano sicurezza](SECURITY_PLAN.md)
 
