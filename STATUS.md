@@ -32,8 +32,8 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Dopo autorizzazione separata, verificare in ROM le doppie letture correnti di OTA1, NVS e otadata e confermare OTA0 originale.
-2. Usare solo OTA1 per il candidato S3 UI Trial, rileggere l'immagine dopo la programmazione e tenere la copia corrente M1d di OTA1 per un eventuale recupero autorizzato. Il C6 mantiene l'applicazione M1d installata.
+1. Dopo autorizzazione esplicita alla programmazione, riconfermare identità S3, modalità ROM, selezione OTA1 e hash del candidato S3 UI Trial. Se il radar ha avviato l'app dal preflight, verificare di nuovo NVS e otadata.
+2. Programmare e rileggere il candidato soltanto in OTA1. La copia M1d verificata dei settori interessati è disponibile per un eventuale ripristino autorizzato. Il collaudo usa il C6 M1d già installato.
 3. Collaudare display, touch e recupero con alimentazione solo USB e attuatori isolati. Verificare il canale reale prima di interpretare il link. DRC2 su hardware e cattura CCMP rimangono prove separate.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
@@ -150,3 +150,9 @@ Nove build **PASS** con Arduino ESP32 3.3.12. S3 compilato su Linux, C6 su Windo
 | Candidato per il collaudo UI | Byte | SHA-256 | Intervallo massimo di erase dell'app |
 |---|---:|---|---|
 | S3 UI Trial, app OTA1 | 1784096 | `0ee789eb49cc277548a1786665e4294a7c0eed233c18e95aadb8d35553a9b073` | `0x310000–0x4c3fff` |
+
+### Preflight S3 UI Trial in ROM
+
+- **PASS** S3 riconosciuto in download ROM con flash da 16 MiB. Bootloader, tabella partizioni e OTA0 originali verificati. Due letture di tabella, NVS, otadata e dell'intero slot OTA1 da 3 MiB coincidono byte per byte. OTA1 contiene l'app M1d attesa e resta selezionato con sequenza 4, stato VALID e CRC valido. Otadata coincide con il checkpoint M1d.
+- **PASS** DRC1 identico al backup, DRC2 assente. Rispetto alla lettura M1d precedente, le sole differenze logiche in NVS riguardano tre voci PHY. Binario UI Trial verificato per target, checksum, hash, compatibilità della tabella e ingombro. Copie, hash delle letture e copia dei settori di recupero `0x310000–0x4c3fff` conservati fuori da Git.
+- **NOT RUN** programmazione e avvio della UI. Al termine del preflight il radar è in modalità ROM.
