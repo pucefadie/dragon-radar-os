@@ -1,6 +1,6 @@
 # Piano sicurezza — ESP32-S3 e ESP32-C6
 
-Per M1c si accetta NVS in chiaro soltanto al banco, per una coppia con credenziali temporanee. DRA1 autentica il traffico e ESP-NOW cifra l'unicast con LMK, ma il record `dragon_radio/peer_v1` contiene LMK, chiave HMAC e PMK leggibili da chi può leggere la flash. Un dispositivo con accesso al record può impersonare il peer. I beacon DRB2 restano pubblici. Nessuna delle seguenti opzioni è autorizzata adesso.
+Per il banco si accetta NVS in chiaro per una coppia con credenziali temporanee. DRA1 autentica il traffico e ESP-NOW cifra l'unicast con LMK. I record `dragon_radio/peer_v1` e `dragon_radio/peer_v2` contengono materiale di chiave leggibile da chi può leggere la flash. DRC2 condivide la PMK nel dominio e assegna a ciascuna coppia le proprie LMK e chiave HMAC. Un dispositivo con accesso al record può impersonare il relativo peer. I beacon DRB2 restano pubblici. Nessuna delle opzioni di protezione a riposo qui sotto è autorizzata adesso.
 
 | Protezione | Cosa protegge | S3 e C6 |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Dragon Radar OS — stato M1
 
-**Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1b:** `a43bfe7` · **Baseline piano M1c:** `bbfd0ae` · **PR #2:** draft. La [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-7099858848) ha segnalato la distinzione fra configurazione S3 storica e banco corrente in sola USB. La procedura di riferimento è [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md).
+**Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1c fisica:** `0966740` · **PR #2:** draft. La [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-7100886934) ha segnalato isolamento dei flag, limiti della prova CCMP e verifica degli errori PMK. La procedura di riferimento è [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md).
 
 | Stato | Evidenza |
 |---|---|
@@ -8,7 +8,7 @@
 | **PASS — preparazione M1c** | Rieseguiti otto test C++ e il test del generatore con record sintetici. Verificati hash dei sei binari M1b, coppie dei backup integrali S3/C6, layout e fit delle immagini app per il banco. Bootstrap S3 storico con rollback attivo. Build C6 standard e provisioning `no_ota` riuscite e corrispondenti alla tabella C6 archiviata. |
 | **FAIL — profilo C6 M1b rispetto alla scheda** | Le immagini C6 M1b erano valide per il proprio profilo a due slot, ma quella tabella non corrisponde a quella archiviata per il C6 fisico. Usare solo i nuovi candidati app C6 `no_ota`, previa verifica corrente. |
 | **PASS storico — DRB2 fisico, solo ricezione** | Ricevitore S3 minimale: 10 beacon validi confermati sul canale 6, senza errori CRC nei report completi, NVS immutata. Al termine OTA1 selezionato con sequenza 4 VALID, OTA0 integro. Non è una prova DRA1. |
-| **PASS — M1c fisico, profilo banco** | Provisioning e DRA1 verificati su S3/C6 con PMK comune derivata. Handshake, ACK/retry, tag errato, replay, perdita e recupero verificati. La configurazione PMK dei binari standard e la cattura indipendente CCMP restano aperte. |
+| **PASS — M1c fisico, profilo banco** | Provisioning e DRA1 verificati su S3/C6 con PMK comune derivata. Handshake, ACK/retry, tag errato, replay, perdita e recupero verificati. L'evidenza fisica M1d e la cattura indipendente CCMP restano aperte. |
 
 ## Audit storico S3 con batteria e motore collegati
 
@@ -31,9 +31,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Definire la compatibilità PMK del firmware standard e dei record preesistenti partendo dal risultato S3/C6 di banco.
-2. Verificare il profilo standard con gli stessi casi DRA1. Per ogni reinstallazione, riverificare lo stato corrente e gli intervalli di scrittura. Conservare le impostazioni e i backup pre-installazione.
-3. Acquisire un'osservazione radio indipendente di CCMP e decidere quando eseguire il ritorno al firmware originale. Rivalutare alimentazione e attuatori se cambia il banco.
+1. Autorizzare il primo collaudo M1d con i DRC1 esistenti, percorso DRA1 standard nelle due immagini radio di banco. Acquisire backup correnti e scrivere solo OTA1 S3 e app0 C6.
+2. Verificare in una sessione separata il provisioning coordinato DRC2 via USB, la selezione `record_version=2` e gli stessi casi DRA1. Conservare le impostazioni e i backup pre-installazione.
+3. Acquisire un'osservazione radio indipendente di CCMP e verificare il ritorno al firmware precedente. Rivalutare alimentazione e attuatori se cambia il banco.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -110,4 +110,23 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 - **PASS riavvii e recupero** C6 tenuto in ROM per almeno 20 s, radar in Lost, poi ritorno a Paired su entrambi all'avvio del C6. Riavvio separato S3 con C6 acceso, nuova sessione e conferme riprese. Nessun reinvio delle associazioni.
 - **Build installate e rilette byte per byte** S3 in OTA1 da 880768 byte, SHA-256 `0464142cc572571f13df612c75290f78f42f387d2f604b0aafac13a51503df64`; C6 in app0 da 964800 byte, SHA-256 `a597e6940e72e67c7be252c0ec4efae2cfc5dadfe906f40d6681f4f48021f8d0`. I metadati OTA S3 sono rimasti invariati.
 - **PASS integrità finale** S3 bootloader/tabella, OTA0, otadata, FAT e coda di OTA1 oltre l'area toccata coincidono con le copie di riferimento. C6 bootloader/tabella, otadata, SPIFFS, coredump e coda di app0 coincidono. Le due NVS sono state lette due volte e conservano i record di banco. Al di fuori del pairing le sole differenze logiche riguardano Wi-Fi/PHY. Dopo il controllo entrambe le schede sono tornate Paired sul canale 6.
-- **Aperto** consolidare la configurazione PMK dei binari standard e verificarla con i record previsti per produzione. Vista separata del bit Protected/CCMP tramite sniffer e ripristino effettivo dei firmware originali **NOT RUN**.
+- **Aperto al termine di M1c** configurazione PMK dei binari standard, vista separata del bit Protected/CCMP tramite sniffer e ripristino effettivo dei firmware originali.
+
+## M1d — PMK del firmware standard
+
+- **PASS implementazione** DRC2 con una PMK casuale comune al dominio e LMK/HMAC distinte per coppia. Il parser preferisce DRC2 e rifiuta un valore invalido presente. Solo in assenza di DRC2 legge DRC1. La derivazione DRC1 in RAM usa il contesto del banco riuscito. Firmware e utilità non riscrivono DRC1. L'utility separata aggiunge DRC2 solo se assente. Il flag sperimentale è stato rimosso dalle build.
+- **PASS host** nove gruppi esistenti, suite DRA1 standard e fixture con ASan/UBSan, utility USB in cinque scenari con e senza sanitizzatori. Coperti precedenza e fallimento DRC2, compatibilità DRC1, HMAC con chiave errata, ACK, retry, duplicati, replay e riavvio. I test host non esercitano la radio CCMP.
+- **PASS recupero offline** due backup originali S3 da 16 MiB, due snapshot pre-M1c C6 da 4 MiB e hash dei readback applicativi del collaudo M1c riverificati. Prima di una futura scrittura servono due nuove catture delle regioni live. Il recupero dell'app C6 passa da ROM e dallo stesso slot.
+- **NOT RUN hardware M1d** nessun contatto con le schede in questa fase. I PASS fisici sopra sono del checkpoint M1c. Restano collaudo DRC1 con i nuovi firmware radio standard, prova coordinata DRC2, ritorno fisico e cattura CCMP. Il profilo standard di prodotto S3, con UI e periferiche, richiede una prova distinta da quella del percorso radio protetto.
+
+### Build verificate al checkpoint di pausa
+
+Arduino ESP32 3.3.12. Verificati formato, hash, marker e corrispondenza alle tabelle partizioni archiviate per i candidati sotto. S3 standard completo, S3 DEV, fixture S3 e C6 DEV restano da verificare al rientro.
+
+| Candidato | Byte | SHA-256 |
+|---|---:|---|
+| s3-bench | 879776 | `ad5f266a3cea3b32137095e5693452bccce01ce0948d7886f5bb76c4988e3f40` |
+| s3-provision | 378304 | `41f4320af57026ea17e722370a98523bfa75d7ca545082520e45851927decdb7` |
+| c6-radio | 965008 | `31e5fbc62c5936098530e5baff4654e33e96b1f321dfdb1176f4c9e8069f5eed` |
+| c6-provision | 245312 | `a4b8ea25bc2f4b609a586e297386cdf441b67f797e1298fe7f771ef3cbd455f5` |
+| c6-standard | 972416 | `11ca28197d34723d44da45de2aff5f76e79c90edd2d337f2d97462af32404acb` |

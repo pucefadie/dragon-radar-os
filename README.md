@@ -2,7 +2,7 @@
 
 Questo repository GitHub è uno **snapshot pulito della v0.3**. La cronologia diagnostica completa, i log di collaudo e i backup del dispositivo restano conservati soltanto nel repository locale originale.
 
-Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. Il banco S3/C6 ha verificato provisioning e DRA1 sul canale 6 con il profilo a PMK comune derivata. La configurazione PMK dei binari standard resta da consolidare. Non interpretare RSSI come distanza o direzione.
+Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. Il banco M1c ha verificato DRA1 sul canale 6. M1d porta la compatibilità con i DRC1 installati nel firmware standard e aggiunge DRC2 con PMK casuale condivisa. Il collaudo fisico M1d resta da eseguire. Non interpretare RSSI come distanza o direzione.
 
 [Stato e verifiche](STATUS.md) · [Procedura M1c](M1C_BENCH_TEST.md) · [Piano sicurezza](SECURITY_PLAN.md)
 
@@ -56,6 +56,15 @@ Per verificare anche le azioni della fixture opzionale M1c sullo stesso codice:
 
 ```bash
 g++ -std=c++11 -Wall -Wextra -Werror -DM1C_BENCH_MODE=1 -DM1C_BENCH_FIXTURE=1 -Iinclude tests/secure_radio_test.cpp src/secure_radio.cpp src/radio_link.cpp -lcrypto -o /tmp/secure_radio_fixture_test && /tmp/secure_radio_fixture_test
+```
+
+L'utility USB si può verificare su host con una NVS simulata.
+
+```bash
+g++ -std=c++11 -Wall -Wextra -Werror -Itests/provision_mocks -Iinclude tests/secure_radio_provision_test.cpp src/secure_radio.cpp src/radio_link.cpp -o /tmp/secure_radio_provision_test
+for case_name in install legacy exists lookup-error commit-error; do
+  /tmp/secure_radio_provision_test "$case_name" || exit 1
+done
 ```
 
 ## Privacy e stato

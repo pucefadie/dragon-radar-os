@@ -1,13 +1,13 @@
 #pragma once
-#include <Preferences.h>
+#include <nvs.h>
 #include <esp_mac.h>
 #include <esp_random.h>
 #include <mbedtls/md.h>
 #include <new>
 #include "dev_radio_tx.h"
 
-#if M1C_LINK_PMK_PROBE && (RADIO_DEV_INSECURE || (!M1C_BENCH_FIXTURE && !M1C_C6_NVS_GUARD))
-#error "The shared PMK experiment is restricted to M1c bench radio builds."
+#if M1C_LINK_PMK_PROBE
+#error "The M1c PMK experiment has been retired. Select a provisioned record instead."
 #endif
 
 class SecureEspNow final : private SecureRadioIo {
@@ -17,29 +17,15 @@ class SecureEspNow final : private SecureRadioIo {
   // Only a deliberately provisioned one-sphere link may register an encrypted peer.
   bool begin(bool controller) {
     if (radio_) return true;
-    Preferences prefs;
-    uint8_t record[SECURE_CONFIG_SIZE]{};
+    nvs_handle_t storage;
     SecureRadioConfig config{};
-    if (!prefs.begin("dragon_radio",true)) return false;
-    const bool loaded=prefs.getBytesLength("peer_v1")==sizeof(record) &&
-      prefs.getBytes("peer_v1",record,sizeof(record))==sizeof(record) &&
-      secureRadioDecodeConfig(record,sizeof(record),config);
-    prefs.end();
-    erase(record,sizeof(record));
-    if (!loaded) return false;
-#if M1C_LINK_PMK_PROBE
-    // A/B experiment for ESP-NOW interoperability. The on-air LMK and
-    // application HMAC key stay the same. The stored records are untouched.
-    static constexpr uint8_t context[]="DRA1 M1c bench shared PMK";
-    uint8_t derived[32]{};
-    const bool derivedOk=sign(config.auth,context,sizeof(context)-1,derived);
-    if (derivedOk) memcpy(config.pmk,derived,sizeof(config.pmk));
-    erase(derived,sizeof(derived));
-    if (!derivedOk) {
-      erase(&config,sizeof(config));
+    if (nvs_open(SECURE_RECORD_NAMESPACE,NVS_READONLY,&storage)!=ESP_OK) return false;
+    const bool loaded=secureRadioLoadConfig(readRecord,&storage,config);
+    nvs_close(storage);
+    if (!loaded || !secureRadioResolvePmk(config,*this)) {
+      secureRadioClear(&config,sizeof(config));
       return false;
     }
-#endif
     if (!queue_) queue_=xQueueCreate(8,sizeof(Packet));
     esp_now_peer_info_t peer{};
     memcpy(peer.peer_addr,config.peer,6);
@@ -48,9 +34,12 @@ class SecureEspNow final : private SecureRadioIo {
     peer.channel=config.channel; // Let the driver reject TX if the channel moves.
     peer.encrypt=true;
     // Never replace an existing peer or fall back to plaintext.
-    const bool installed=queue_ && esp_wifi_get_mac(WIFI_IF_STA,local_)==ESP_OK &&
-      memcmp(config.peer,local_,6) && !esp_now_is_peer_exist(config.peer) &&
-      esp_now_set_pmk(config.pmk)==ESP_OK && esp_now_add_peer(&peer)==ESP_OK;
+    if (queue_ && esp_wifi_get_mac(WIFI_IF_STA,local_)==ESP_OK &&
+        memcmp(config.peer,local_,6) && !esp_now_is_peer_exist(config.peer)) {
+      pmkResult_=esp_now_set_pmk(config.pmk);
+      if (pmkResult_==ESP_OK) peerResult_=esp_now_add_peer(&peer);
+    }
+    const bool installed=pmkResult_==ESP_OK && peerResult_==ESP_OK;
     if (installed) {
       // On IEEE 802.15.4 targets the eFuse API returns an EUI-64.
       uint8_t factory[8]{};
@@ -61,10 +50,11 @@ class SecureEspNow final : private SecureRadioIo {
       factorySta_=factoryRead && !memcmp(factory,local_,6);
       radio_=new (storage_) SecureRadio(*this,controller,config);
       channel_=config.channel;
+      recordVersion_=config.version;
       accepting_.store(true,std::memory_order_release);
     }
-    erase(&config,sizeof(config));
-    erase(&peer,sizeof(peer));
+    secureRadioClear(&config,sizeof(config));
+    secureRadioClear(&peer,sizeof(peer));
     return installed;
   }
   void enqueue(const esp_now_recv_info_t *info,const uint8_t *bytes,int length) {
@@ -105,15 +95,11 @@ class SecureEspNow final : private SecureRadioIo {
       (unsigned long)diagnostics.probe_retry_queued,(unsigned long)diagnostics.auth_rejected,
       (unsigned long)diagnostics.stale_session,(unsigned long)diagnostics.duplicate_probe);
     const SecureTxDiagnostics tx=tx_.secureDiagnostics();
-    out.printf("[SECURE TRANSPORT] sta_factory=%d pmk_probe=%d sign_errors=%lu rx_callbacks=%lu rx_unavailable=%lu"
+    out.printf("[SECURE TRANSPORT] sta_factory=%d record_version=%u pmk_result=%d peer_result=%d"
+      " sign_errors=%lu rx_callbacks=%lu rx_unavailable=%lu"
       " rx_wrong_destination=%lu rx_processed=%lu tx_enqueued=%lu tx_queue_full=%lu tx_expired=%lu"
       " tx_missing_peer=%lu tx_submitted=%lu tx_api_rejected=%lu tx_delivered=%lu tx_delivery_failed=%lu last_tx_error=%d\n",
-      factorySta_,
-#if M1C_LINK_PMK_PROBE
-      1,
-#else
-      0,
-#endif
+      factorySta_,unsigned(recordVersion_),int(pmkResult_),int(peerResult_),
       (unsigned long)signErrors_,(unsigned long)rxCallbacks_.load(),(unsigned long)rxUnavailable_.load(),
       (unsigned long)rxWrongDestination_.load(),(unsigned long)rxProcessed_,
       (unsigned long)tx.enqueued,(unsigned long)tx.queueFull,(unsigned long)tx.expired,(unsigned long)tx.missingPeer,
@@ -135,9 +121,13 @@ class SecureEspNow final : private SecureRadioIo {
 #endif
  private:
   struct Packet { uint8_t source[6],bytes[SECURE_RADIO_SIZE]; };
-  static void erase(void *p,size_t n) {
-    volatile uint8_t *bytes=static_cast<volatile uint8_t*>(p);
-    while(n--) *bytes++=0;
+  static SecureRecordRead readRecord(void *storage,const char *key,uint8_t *bytes,size_t &length) {
+    const nvs_handle_t handle=*static_cast<nvs_handle_t*>(storage);
+    nvs_type_t type;
+    const esp_err_t found=nvs_find_key(handle,key,&type);
+    if (found==ESP_ERR_NVS_NOT_FOUND) return SecureRecordRead::Missing;
+    if (found!=ESP_OK || type!=NVS_TYPE_BLOB) return SecureRecordRead::Error;
+    return nvs_get_blob(handle,key,bytes,&length)==ESP_OK?SecureRecordRead::Loaded:SecureRecordRead::Error;
   }
   bool sign(const uint8_t *key,const uint8_t *bytes,size_t size,uint8_t *tag) override {
     const auto *md=mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -154,6 +144,8 @@ class SecureEspNow final : private SecureRadioIo {
   SecureRadio *radio_=nullptr;
   QueueHandle_t queue_=nullptr;
   uint8_t local_[6]{},channel_=0;
+  SecureRecordVersion recordVersion_=SecureRecordVersion::None;
+  esp_err_t pmkResult_=ESP_ERR_INVALID_STATE,peerResult_=ESP_ERR_INVALID_STATE;
   bool aligned_=false,factorySta_=false;
   uint32_t signErrors_=0,rxProcessed_=0;
   std::atomic<uint32_t> drop_{0};

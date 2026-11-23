@@ -18,10 +18,16 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Gestione dei casi: peer errato, MAC/sessione/ID non corrispondenti, replay, ACK persi/tardivi, riavvio, scadenza peer, canale bloccato da AP, disconnessione.
 - Per ogni modifica: unit test host e build S3/C6, default e DEV; controllo che DEV non sia attivo nei binari default.
 
-**M1c preflight e collaudo fisico — IN CORSO.**
+**M1c preflight e collaudo fisico — PASS sul profilo di banco.**
 - Seguire `FIRST_RADIO_TEST.md` verificando prima la procedura corrente; identificare schede/porte/antenna/partizioni e predisporre piano di rollback. Non eseguire flash senza consenso esplicito.
 - Registrare sul banco S3↔C6 l'handshake autenticato, gli ACK, il canale effettivo, RSSI, perdite, retry e recupero. Usare i contatori DRA1 e una fixture approvata per i casi negativi mirati.
 - Chiudere M1 solo con evidenza fisica e criteri sicurezza verificati. **PR #2 rimane draft e non va mergiata automaticamente.**
+
+**M1d configurazione PMK standard — implementazione e convalida offline.**
+
+- DRC2 con PMK casuale per dominio e LMK/HMAC per coppia. Lettura DRC1 compatibile con il banco senza scrivere NVS. Priorità DRC2 senza downgrade su errori.
+- Primo collaudo autorizzato del percorso standard con DRC1 esistente e immagini senza DEV/fixture. Colloquio DRC2 dopo provisioning coordinato, cattura CCMP indipendente e ripristino effettivo da ROM ancora da verificare.
+- L'estensione a ID 1–7 conserverà un solo valore PMK per radio e una configurazione separata per peer. Il limite software corrente è ID 1.
 
 ## M2 — Esperienza radar (successiva a M1)
 - UI e launcher bottom-up con modalità Radar / Audiobookshelf / Impostazioni / Debug.

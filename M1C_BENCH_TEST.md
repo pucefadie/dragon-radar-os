@@ -1,6 +1,16 @@
 # M1c — collaudo su banco in preparazione
 
-Il preflight sulle schede collegate è autorizzato in sola lettura. Programmazione, provisioning e ripristino richiedono approvazione distinta. Baseline M1b `a43bfe7`. Vedere [STATUS.md](STATUS.md) per i risultati correnti e [SECURITY_PLAN.md](SECURITY_PLAN.md) per la decisione sulle chiavi.
+Il collaudo M1c è concluso per il profilo di banco di `0966740`. La preparazione M1d è offline. Vedere [STATUS.md](STATUS.md) per i risultati correnti e [SECURITY_PLAN.md](SECURITY_PLAN.md) per la protezione delle chiavi.
+
+## Prossimo collaudo M1d
+
+1. Dopo autorizzazione, verificare USB, isolamento attuatori e ROM su entrambe le schede. Fare due copie nuove e confrontarle di OTA1 S3, app0 C6, NVS e otadata. Registrare gli hash fuori da Git. Verificare il bootloader e la tabella live, la selezione OTA1 seq 4 VALID, OTA0 preservato e il canale previsto. Il banco M1c usava sola USB, senza batteria S3.
+2. Usare i candidati radio M1d protetti di avvio con DRA1 standard, fixture e DEV disabilitati. Programmare soltanto l'app S3 a `0x310000` entro `0x300000` byte e l'app C6 `no_ota` a `0x10000` entro `0x200000` byte. Con OTA1 ancora VALID non aggiornare otadata. Rileggere integralmente gli intervalli programmati prima del boot. L'immagine S3 standard completa è disponibile per una prova successiva del firmware di prodotto. Per il primo test chiavi si usa l'app di banco ordinaria con lo stesso trasporto DRA1 e avvio protetto, così il confronto esclude gli attuatori e il recupero automatico che cancellerebbe NVS.
+3. Con i DRC1 esistenti, verificare `record_version=1 pmk_result=0 peer_result=0`, canale 6, almeno 60 s Paired e conferme in crescita su entrambi. Provare perdita/ritorno e riavvio di ciascun dispositivo. DRC1 deve funzionare senza utility di provisioning. Confrontare la NVS dopo la prova: le associazioni devono rimanere identiche, mentre l'avvio radio può aggiornare metadati PHY. Conservare il log privo di valori segreti. La cattura indipendente dei frame CCMP richiede uno sniffer.
+4. Se la prova si interrompe, lasciare la scheda interessata recuperabile in ROM. Il ritorno approvato usa la copia integrale OTA1 appena acquisita a `0x310000` sul S3 e la copia app0 a `0x10000` sul C6. Rileggere e confrontare prima del boot. C6 ha uno slot solo e richiede ROM. Le immagini M1c archiviate usano ancora DRC1. Tenerle con i backup, senza ripristino integrale o scritture OTA/NVS nella prima prova.
+5. In una sessione separata approvare la transizione DRC2. Generare una coppia nuova con il generatore aggiornato in una directory privata, installare le due utility protette nei medesimi slot e scrivere una singola associazione per scheda via cavo. Validare che entrambi usino `record_version=2` prima di ripetere i test. Conservare `peer_v1`. Dopo il primo DRC2, l'utility rifiuta qualsiasi altra sostituzione. In caso di errore o transizione a metà, rileggere prima la NVS. Un'eventuale manutenzione di DRC2 richiede una procedura distinta.
+
+Il resto del documento descrive la preparazione e le prove di M1c, con il provisioning aggiornato per i futuri record.
 
 ## 1. Predisposizione e limiti elettrici
 
@@ -45,7 +55,7 @@ Prima della futura sessione autorizzata, predisporre una directory privata fuori
 python3 scripts/make_radio_records.py "$HOME/.local/share/dragon-radar-os/records-m1c-sessione-nuova" --channel 6
 ```
 
-Il percorso deve essere nuovo. Il generatore crea `radar.bin` e `sphere.bin` da 76 byte, con LMK e chiave HMAC condivise e PMK locale differente. Non stampare, inviare a terzi o conservare in log i payload. NVS in chiaro è accettata solo per questi segreti temporanei al banco. La generazione dei record reali e l'invio USB non fanno parte della preparazione odierna.
+Il percorso deve essere nuovo. Il generatore M1d crea `radar.bin` e `sphere.bin` DRC2 da 76 byte, con PMK comune al dominio e LMK e HMAC dedicate alla coppia. Tenere i payload fuori dai log e dal repository. Il banco accetta NVS in chiaro per associazioni temporanee.
 
 1. Approvare un piano per scheda con evidenza elettrica per ogni avvio o reset S3, porta verificata, hash dell'app, offset, intervallo di erase implicito, app originale e recupero ROM. Usare solo il file app `.ino.bin`. I file merged, bootloader, partitions, immagini NVS e comandi generici di upload non rientrano nel piano.
 2. Installare e rileggere l'utility cablata nel solo slot indicato. Sul radar usare esclusivamente il candidato con entrambi i marker `M1C_BENCH_MODE=1` e `M1C_BENCH_PROVISION=1`, dopo il gate elettrico e l'approvazione del binario. Ricontrollare i metadati OTA. Mantenere o selezionare solo un record stabile `VALID` se confermato dal bootloader reale: `NEW` e `PENDING_VERIFY` possono causare scritture autonome; non aggiornare `0xe000`. Prima di inviare dati verificare che l'utility sia quella attesa. Per il C6 usare `scripts/build_m1c_c6.sh provision NUOVA_DIRECTORY` e `scripts/build_m1c_c6.sh radio NUOVA_DIRECTORY`, con il marker `M1C_C6_NVS_GUARD=1`. Gli avvii di banco S3 e C6 si fermano se la NVS non si inizializza. La build radio C6 usa Wi-Fi in RAM e disabilita l'auto-reconnect. La normale gestione NVS/PHY può comunque scrivere metadati e calibrazione; si preservano le impostazioni tramite catture e piano di recupero, senza promettere NVS byte-identica. L'autorizzazione futura deve coprire il provisioning e il relativo rischio; se è richiesta NVS immutabile, l'utility attuale non soddisfa il requisito.
@@ -54,7 +64,7 @@ Il percorso deve essere nuovo. Il generatore crea `radar.bin` e `sphere.bin` da 
 
 Sul radar entrato manualmente in ROM, il reset USB via RTS può lasciarlo in modalità download. Nella configurazione solo USB con gli attuatori isolati, esptool `--after watchdog-reset` è stato verificato sullo S3 per l'avvio normale. Sul C6 usare il reset USB normale. [Opzioni di reset Espressif](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/esptool/advanced-options.html)
 
-Per riprodurre il profilo radio del collaudo fisico usare `M1C_LINK_PMK_PROBE=1` per entrambe le build radio di banco, con `M1C_BENCH_FIXTURE=1` sullo S3. Il marker seriale `pmk_probe=1` indica che entrambi derivano la stessa PMK in RAM con HMAC e un contesto dedicato. I record NVS, la LMK e la chiave HMAC applicativa restano quelli del provisioning. I firmware ordinari continuano a usare il proprio record.
+Nelle immagini M1c archiviate, `pmk_probe=1` identificava il profilo di banco riuscito. M1d elimina quel flag e applica la stessa derivazione solo ai DRC1, come regola di compatibilità. I DRC2 usano la PMK salvata. La console M1d riporta `record_version` al posto del flag.
 
 ## 4. Matrice di prova futura
 

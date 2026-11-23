@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate complementary Dragon Radar M1 provisioning records offline."""
+"""Generate a private DRC2 pair for a new Dragon Radar radio domain."""
 import argparse
 from pathlib import Path
 import secrets
@@ -30,11 +30,14 @@ def main():
     if s3 == c6:
         parser.error("devices must have different STA addresses")
     dest.mkdir(mode=0o700)
-    common = secrets.token_bytes(16) + secrets.token_bytes(32)
+    # One PMK for the ESP-NOW domain, with a separate LMK and HMAC key per pair.
+    lmk = secrets.token_bytes(16)
+    auth = secrets.token_bytes(32)
+    pmk = secrets.token_bytes(16)
     for name, target in (("radar.bin", c6), ("sphere.bin", s3)):
         file = dest / name
         file.touch(mode=0o600, exist_ok=False)
-        file.write_bytes(b"DRC1" + bytes((1, args.channel)) + target + common + secrets.token_bytes(16))
+        file.write_bytes(b"DRC2" + bytes((1, args.channel)) + target + lmk + auth + pmk)
 
 
 if __name__ == "__main__":

@@ -9,12 +9,22 @@
 
 constexpr size_t SECURE_RADIO_SIZE = 80;
 constexpr size_t SECURE_CONFIG_SIZE = 76;
+constexpr char SECURE_RECORD_NAMESPACE[] = "dragon_radio";
+constexpr char SECURE_RECORD_V1_KEY[] = "peer_v1";
+constexpr char SECURE_RECORD_V2_KEY[] = "peer_v2";
+
+enum class SecureRecordVersion : uint8_t { None, V1, V2 };
+enum class SecureRecordRead { Missing, Loaded, Error };
+using SecureRecordReader = SecureRecordRead (*)(void *, const char *, uint8_t *, size_t &);
 
 // One deliberately provisioned sphere (ID 1). Keys have separate purposes.
 struct SecureRadioConfig {
   uint8_t channel, peer[6], lmk[16], auth[32], pmk[16];
+  SecureRecordVersion version;
 };
 bool secureRadioDecodeConfig(const uint8_t *bytes, size_t length, SecureRadioConfig &out);
+bool secureRadioLoadConfig(SecureRecordReader read, void *storage, SecureRadioConfig &out);
+void secureRadioClear(void *bytes, size_t length);
 
 class SecureRadioIo {
  public:
@@ -23,6 +33,7 @@ class SecureRadioIo {
   virtual void random(uint8_t *bytes, size_t length) = 0;
   virtual bool send(const uint8_t *mac, const uint8_t *bytes, size_t length) = 0;
 };
+bool secureRadioResolvePmk(SecureRadioConfig &config, SecureRadioIo &io);
 
 struct SecureRadioDiagnostics {
   uint32_t probe_retry_queued = 0;

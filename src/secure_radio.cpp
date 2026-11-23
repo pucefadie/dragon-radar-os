@@ -21,11 +21,15 @@ uint32_t get32(const uint8_t *b) { uint32_t n=0; for(unsigned i=0;i<4;++i) n|=ui
 }
 
 bool secureRadioDecodeConfig(const uint8_t *b,size_t len,SecureRadioConfig &out) {
-  // DRC1, sphere ID, channel, peer MAC, LMK, auth key, local PMK.
-  if (!b || len!=SECURE_CONFIG_SIZE || std::memcmp(b,"DRC1",4) || b[4]!=1 ||
+  // Versioned magic, sphere ID, channel, peer MAC, LMK, auth key, PMK field.
+  if (!b || len!=SECURE_CONFIG_SIZE || std::memcmp(b,"DRC",3) ||
+      (b[3]!='1' && b[3]!='2') || b[4]!=1 ||
       b[5]<1 || b[5]>13 || (b[6]&1) || !nonzero(b+6,6) ||
       !nonzero(b+12,16) || !nonzero(b+28,32) || !nonzero(b+60,16) ||
       equal(b+12,b+60,16)) return false;
+  if (b[3]=='2' && (equal(b+60,b+28,16) || equal(b+60,b+44,16) ||
+                    equal(b+12,b+28,16) || equal(b+12,b+44,16))) return false;
+  out.version=b[3]=='2'?SecureRecordVersion::V2:SecureRecordVersion::V1;
   out.channel=b[5];
   std::memcpy(out.peer,b+6,6);
   std::memcpy(out.lmk,b+12,16);
@@ -34,10 +38,48 @@ bool secureRadioDecodeConfig(const uint8_t *b,size_t len,SecureRadioConfig &out)
   return true;
 }
 
+void secureRadioClear(void *data,size_t length) {
+  volatile uint8_t *bytes=static_cast<volatile uint8_t*>(data);
+  while (length--) *bytes++=0;
+}
+
+bool secureRadioLoadConfig(SecureRecordReader read,void *storage,SecureRadioConfig &out) {
+  uint8_t data[SECURE_CONFIG_SIZE]{};
+  size_t length=sizeof(data);
+  SecureRecordVersion expected=SecureRecordVersion::V2;
+  SecureRecordRead result=read(storage,SECURE_RECORD_V2_KEY,data,length);
+  if (result==SecureRecordRead::Missing) {
+    expected=SecureRecordVersion::V1;
+    length=sizeof(data);
+    result=read(storage,SECURE_RECORD_V1_KEY,data,length);
+  }
+  const bool valid=result==SecureRecordRead::Loaded &&
+    secureRadioDecodeConfig(data,length,out) && out.version==expected;
+  secureRadioClear(data,sizeof(data));
+  if (!valid) secureRadioClear(&out,sizeof(out));
+  return valid;
+}
+
+bool secureRadioResolvePmk(SecureRadioConfig &config,SecureRadioIo &io) {
+  if (config.version==SecureRecordVersion::V2) return true;
+  if (config.version!=SecureRecordVersion::V1) return false;
+  // Exact label used by the working M1c profile. Changing it breaks DRC1 peers.
+  static constexpr uint8_t context[]="DRA1 M1c bench shared PMK";
+  uint8_t derived[32]{};
+  const bool valid=io.sign(config.auth,context,sizeof(context)-1,derived) &&
+    nonzero(derived,sizeof(config.pmk)) && !equal(derived,config.lmk,sizeof(config.pmk));
+  if (valid) std::memcpy(config.pmk,derived,sizeof(config.pmk));
+  else secureRadioClear(config.pmk,sizeof(config.pmk));
+  secureRadioClear(derived,sizeof(derived));
+  return valid;
+}
+
 SecureRadio::SecureRadio(SecureRadioIo &io,bool controller,const SecureRadioConfig &config)
     : io_(io),controller_(controller),config_(config) {
   peers_.open(0,1);
   peers_.pair(1,config_.peer,config_.lmk,0);
+  secureRadioClear(config_.pmk,sizeof(config_.pmk));
+  secureRadioClear(config_.lmk,sizeof(config_.lmk));
 }
 
 bool SecureRadio::pack(uint8_t *b,Kind kind,const Nonces &nonce,uint32_t seq,uint32_t ack) {

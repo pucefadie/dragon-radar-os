@@ -11,8 +11,10 @@ struct Wire : SecureRadioIo {
   std::deque<Frame> queue;
   uint8_t counter;
   bool accepting = true;
+  bool signing = true;
   explicit Wire(uint8_t seed):counter(seed) {}
   bool sign(const uint8_t *key,const uint8_t *bytes,size_t length,uint8_t *tag) override {
+    if (!signing) return false;
     unsigned size=0;
     return HMAC(EVP_sha256(),key,32,bytes,length,tag,&size) && size==32;
   }
@@ -29,19 +31,95 @@ struct Wire : SecureRadioIo {
   Frame take() { assert(!queue.empty()); Frame frame=queue.front(); queue.pop_front(); return frame; }
 };
 
-static SecureRadioConfig make(uint8_t peer) {
-  uint8_t record[SECURE_CONFIG_SIZE]{'D','R','C','1',1,6,peer};
+using Record = std::array<uint8_t,SECURE_CONFIG_SIZE>;
+static Record makeRecord(uint8_t peer,uint8_t version='2') {
+  Record record{{'D','R','C',version,1,6,peer}};
   record[12]=5; record[28]=8; record[60]=9;
+  return record;
+}
+
+static SecureRadioConfig make(uint8_t peer) {
+  Record record=makeRecord(peer);
   SecureRadioConfig cfg{};
-  assert(!secureRadioDecodeConfig(record,sizeof(record)-1,cfg));
+  assert(!secureRadioDecodeConfig(record.data(),record.size()-1,cfg));
   record[4]=2;
-  assert(!secureRadioDecodeConfig(record,sizeof(record),cfg));
+  assert(!secureRadioDecodeConfig(record.data(),record.size(),cfg));
   record[4]=1;
   record[5]=0;
-  assert(!secureRadioDecodeConfig(record,sizeof(record),cfg));
+  assert(!secureRadioDecodeConfig(record.data(),record.size(),cfg));
   record[5]=6;
-  assert(secureRadioDecodeConfig(record,sizeof(record),cfg));
+  assert(secureRadioDecodeConfig(record.data(),record.size(),cfg));
+  assert(cfg.version==SecureRecordVersion::V2);
   return cfg;
+}
+
+struct StoredRecords {
+  Record v1=makeRecord(2,'1'), v2=makeRecord(4);
+  SecureRecordRead v2Status=SecureRecordRead::Loaded;
+  size_t v2Length=SECURE_CONFIG_SIZE;
+  unsigned v1Reads=0;
+};
+
+static SecureRecordRead readRecord(void *storage,const char *key,uint8_t *data,size_t &length) {
+  auto &records=*static_cast<StoredRecords *>(storage);
+  const bool v2=std::strcmp(key,SECURE_RECORD_V2_KEY)==0;
+  if (v2 && records.v2Status!=SecureRecordRead::Loaded) return records.v2Status;
+  if (!v2) ++records.v1Reads;
+  const auto &record=v2?records.v2:records.v1;
+  length=v2?records.v2Length:record.size();
+  std::memcpy(data,record.data(),length);
+  return SecureRecordRead::Loaded;
+}
+
+static void testRecords() {
+  Wire io(2);
+  StoredRecords records;
+  SecureRadioConfig config{};
+  assert(secureRadioLoadConfig(readRecord,&records,config));
+  assert(config.peer[0]==4 && config.version==SecureRecordVersion::V2 && records.v1Reads==0);
+  io.signing=false;
+  assert(secureRadioResolvePmk(config,io) && config.pmk[0]==9);
+  assert(!secureRadioDecodeConfig(nullptr,SECURE_CONFIG_SIZE,config));
+  for (size_t offset : {size_t(12),size_t(28),size_t(60)}) {
+    Record invalid=records.v2;
+    invalid[offset]=0;
+    assert(!secureRadioDecodeConfig(invalid.data(),invalid.size(),config));
+  }
+  Record invalid=records.v2;
+  invalid[60]=invalid[12];
+  assert(!secureRadioDecodeConfig(invalid.data(),invalid.size(),config));
+  invalid=records.v2;
+  invalid[60]=invalid[28];
+  assert(!secureRadioDecodeConfig(invalid.data(),invalid.size(),config));
+  records.v2Length=SECURE_CONFIG_SIZE-1;
+  assert(!secureRadioLoadConfig(readRecord,&records,config) && records.v1Reads==0);
+  records.v2Length=SECURE_CONFIG_SIZE;
+  records.v2=records.v1; // A DRC1 blob in the DRC2 slot is invalid.
+  assert(!secureRadioLoadConfig(readRecord,&records,config) && records.v1Reads==0);
+  records.v2Status=SecureRecordRead::Error;
+  assert(!secureRadioLoadConfig(readRecord,&records,config) && records.v1Reads==0);
+  records.v2Status=SecureRecordRead::Missing;
+  assert(secureRadioLoadConfig(readRecord,&records,config) && records.v1Reads==1);
+  assert(config.version==SecureRecordVersion::V1 && config.peer[0]==2);
+  assert(!secureRadioResolvePmk(config,io) && config.pmk[0]==0);
+  io.signing=true;
+  assert(secureRadioResolvePmk(config,io));
+  const uint8_t benchPmk[16]{0xc8,0x57,0xdb,0x8b,0x7b,0x28,0xe7,0x76,0xe5,0xe7,0x90,0x05,0xac,0xaf,0x15,0x5e};
+  assert(std::memcmp(config.pmk,benchPmk,16)==0);
+  records.v1[60]=10; // The legacy stored PMK was local, not a shared value.
+  assert(secureRadioLoadConfig(readRecord,&records,config));
+  assert(secureRadioResolvePmk(config,io) && std::memcmp(config.pmk,benchPmk,16)==0);
+
+  Wire senderWire(20), receiverWire(40);
+  auto wrong=make(2);
+  wrong.auth[0]^=1;
+  SecureRadio sender(senderWire,true,make(4)), receiver(receiverWire,false,wrong);
+  sender.tick(0);
+  const auto hello=senderWire.take();
+  const uint8_t source[6]{2};
+  receiver.receive(source,hello.data(),hello.size(),1);
+  assert(receiverWire.queue.empty() && receiver.diagnostics().auth_rejected==1);
+  assert(receiver.state(1)==LinkState::AwaitingAuthenticatedSession);
 }
 
 #if M1C_BENCH_FIXTURE
@@ -117,6 +195,7 @@ static void testBenchFixture() {
 #endif
 
 int main() {
+  testRecords();
 #if M1C_BENCH_FIXTURE
   testBenchFixture();
 #endif
