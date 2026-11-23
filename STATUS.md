@@ -32,8 +32,8 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Dopo autorizzazione esplicita alla programmazione, riconfermare identità S3, modalità ROM, selezione OTA1 e hash del candidato S3 UI Trial. Se il radar ha avviato l'app dal preflight, verificare di nuovo NVS e otadata.
-2. Programmare e rileggere il candidato soltanto in OTA1. La copia M1d verificata dei settori interessati è disponibile per un eventuale ripristino autorizzato. Il collaudo usa il C6 M1d già installato.
+1. Risolvere in M2a il vincolo di avvio con NVS invariata. Il candidato UI Trial verificato conserva i percorsi di scrittura PHY.
+2. Con un candidato compatibile con il vincolo e autorizzato per hash, programmare e rileggere soltanto OTA1. La copia M1d verificata dei settori interessati è disponibile per un eventuale ripristino autorizzato. Il collaudo usa il C6 M1d già installato.
 3. Collaudare display, touch e recupero con alimentazione solo USB e attuatori isolati. Verificare il canale reale prima di interpretare il link. DRC2 su hardware e cattura CCMP rimangono prove separate.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
@@ -156,3 +156,16 @@ Nove build **PASS** con Arduino ESP32 3.3.12. S3 compilato su Linux, C6 su Windo
 - **PASS** S3 riconosciuto in download ROM con flash da 16 MiB. Bootloader, tabella partizioni e OTA0 originali verificati. Due letture di tabella, NVS, otadata e dell'intero slot OTA1 da 3 MiB coincidono byte per byte. OTA1 contiene l'app M1d attesa e resta selezionato con sequenza 4, stato VALID e CRC valido. Otadata coincide con il checkpoint M1d.
 - **PASS** DRC1 identico al backup, DRC2 assente. Rispetto alla lettura M1d precedente, le sole differenze logiche in NVS riguardano tre voci PHY. Binario UI Trial verificato per target, checksum, hash, compatibilità della tabella e ingombro. Copie, hash delle letture e copia dei settori di recupero `0x310000–0x4c3fff` conservati fuori da Git.
 - **NOT RUN** programmazione e avvio della UI. Al termine del preflight il radar è in modalità ROM.
+
+### M2a — verifica al momento del collaudo
+
+- **PASS in ROM** sul radar COM11, flash da 16 MiB. Bootloader, tabella e OTA0 corrispondono all'originale. OTA1 corrisponde alla copia M1d. NVS e otadata coincidono byte per byte con il preflight. Hash del candidato e manifest dei backup confermati. Il preflight ha usato la configurazione USB con batteria e attuatori scollegati riferita dall'operatore. COM11 conferma la connessione USB dati.
+- **FAIL compatibilità del candidato con NVS invariata**. Il binario con hash `0ee789eb…` è compilato con `CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=y` e contiene `esp_phy_store_cal_data_to_nvs`. Il guard intercetta la cancellazione integrale della partizione. Il precedente avvio radio M1d ha già prodotto variazioni PHY reali. Poiché OTA1 è selezionato, programmare il candidato lo renderebbe avviabile al successivo reset. Il radar è rimasto in ROM con M1d installato.
+- **PASS offline** rieseguiti nove gruppi host, fixture DRA1, ASan/UBSan e cinque casi di provisioning simulato. Passato anche il test host del guard NVS.
+- **NOT RUN** flash, rilettura post-flash, avvio UI, inizializzazione fisica del display, touch e DRA1 per 60 s con il candidato UI Trial.
+
+Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vincolo NVS:
+
+1. Alimentare via USB e lasciare batteria e attuatori scollegati. Verificare che il pannello mostri il Radar con testo leggibile e senza artefatti.
+2. Aprire il launcher con il touch, entrare in Debug → Wi-Fi e sfere e tornare al Radar. Controllare che i tocchi cambino pagina e che le etichette del link siano visibili.
+3. Correlare le etichette di link con le letture contemporanee del comando seriale `beacons` sul canale 6. Annotare separatamente il rendering visibile e l'esito applicativo DRA1.
