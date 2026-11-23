@@ -2,7 +2,7 @@
 
 Questo repository GitHub è uno **snapshot pulito della v0.3**. La cronologia diagnostica completa, i log di collaudo e i backup del dispositivo restano conservati soltanto nel repository locale originale.
 
-Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. Il ricevitore minimale ha già confermato sul banco la ricezione DRB2; il collaudo bidirezionale DRA1 e il provisioning su scheda restano da eseguire. Non interpretare RSSI come distanza o direzione.
+Il ramo M1 integra un collegamento **DRA1 autenticato per una sfera ID 1**, con ESP-NOW unicast cifrato, handshake HMAC, anti-replay e ACK. I beacon DRB2 restano compatibili e non autenticati. DEV è un percorso separato, disattivato di default. Il banco S3/C6 ha verificato provisioning e DRA1 sul canale 6 con il profilo a PMK comune derivata. La configurazione PMK dei binari standard resta da consolidare. Non interpretare RSSI come distanza o direzione.
 
 [Stato e verifiche](STATUS.md) · [Procedura M1c](M1C_BENCH_TEST.md) · [Piano sicurezza](SECURITY_PLAN.md)
 

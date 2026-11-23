@@ -39,4 +39,26 @@ int main() {
   assert(production.init(false));
   assert(production.enqueue(other,frame)); production.tick(); assert(mockAdds==2 && mockSends==6);
   assert(production.enqueue(candidate,frame,sizeof(frame))); production.tick(); assert(mockSends==7);
+  production.completed(ESP_NOW_SEND_SUCCESS);
+  production.tick();
+  assert(production.secureDiagnostics().enqueued==1 && production.secureDiagnostics().delivered==1);
+  assert(production.enqueue(other,frame,sizeof(frame)));
+  production.tick();
+  assert(production.secureDiagnostics().missingPeer==1);
+  mockError=-42;
+  assert(production.enqueue(candidate,frame,sizeof(frame)));
+  production.tick();
+  assert(production.secureDiagnostics().apiRejected==1 && production.secureDiagnostics().lastApiError==-42);
+  mockError=0;
+  assert(production.enqueue(candidate,frame,sizeof(frame)));
+  production.tick();
+  production.completed(ESP_NOW_SEND_FAIL);
+  production.tick();
+  assert(production.secureDiagnostics().submitted==2 && production.secureDiagnostics().deliveryFailed==1);
+  assert(production.enqueue(candidate,frame,sizeof(frame)));
+  mockMillis+=1000;
+  production.tick();
+  assert(production.secureDiagnostics().expired==1);
+  for (int i=0;i<8;++i) assert(production.enqueue(candidate,frame,sizeof(frame)));
+  assert(!production.enqueue(candidate,frame,sizeof(frame)) && production.secureDiagnostics().queueFull==1);
 }

@@ -8,7 +8,7 @@
 | **PASS — preparazione M1c** | Rieseguiti otto test C++ e il test del generatore con record sintetici. Verificati hash dei sei binari M1b, coppie dei backup integrali S3/C6, layout e fit delle immagini app per il banco. Bootstrap S3 storico con rollback attivo. Build C6 standard e provisioning `no_ota` riuscite e corrispondenti alla tabella C6 archiviata. |
 | **FAIL — profilo C6 M1b rispetto alla scheda** | Le immagini C6 M1b erano valide per il proprio profilo a due slot, ma quella tabella non corrisponde a quella archiviata per il C6 fisico. Usare solo i nuovi candidati app C6 `no_ota`, previa verifica corrente. |
 | **PASS storico — DRB2 fisico, solo ricezione** | Ricevitore S3 minimale: 10 beacon validi confermati sul canale 6, senza errori CRC nei report completi, NVS immutata. Al termine OTA1 selezionato con sequenza 4 VALID, OTA0 integro. Non è una prova DRA1. |
-| **NOT RUN — collaudo M1c fisico** | Il C6 ha due backup integrali e il radar ha risposto in ROM. Provisioning, DRA1, ACK, replay, perdita e recupero non sono stati provati sulle schede. La fixture opzionale è documentata nella procedura di banco. |
+| **PASS — M1c fisico, profilo banco** | Provisioning e DRA1 verificati su S3/C6 con PMK comune derivata. Handshake, ACK/retry, tag errato, replay, perdita e recupero verificati. La configurazione PMK dei binari standard e la cattura indipendente CCMP restano aperte. |
 
 ## Audit storico S3 con batteria e motore collegati
 
@@ -31,9 +31,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Conservare il radar in ROM, con sola USB e attuatori isolati. Riverificare le regioni correnti se una scheda viene riavviata fra preflight e installazione.
-2. Approvare i candidati radio e provisioning già verificati contro i layout e le regioni da preservare. Concordare le sole scritture di app e, separatamente, il provisioning e gli eventuali ripristini. Rivalutare alimentazione e attuatori se la configurazione cambia.
-3. Dopo approvazione distinta, programmare e collaudare DRA1. Per i casi negativi usare la variante S3 fixture indicata nella procedura di banco.
+1. Definire la compatibilità PMK del firmware standard e dei record preesistenti partendo dal risultato S3/C6 di banco.
+2. Verificare il profilo standard con gli stessi casi DRA1. Per ogni reinstallazione, riverificare lo stato corrente e gli intervalli di scrittura. Conservare le impostazioni e i backup pre-installazione.
+3. Acquisire un'osservazione radio indipendente di CCMP e decidere quando eseguire il ritorno al firmware originale. Rivalutare alimentazione e attuatori se cambia il banco.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -94,3 +94,20 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | S3 banco ordinario | 878848 | `ebc01cd8ac18e631272cd525a7cc393e4a05ba1dff95701b615a4853d9b99fea` |
 | S3 provisioning | 379968 | `654693ac1244f7173008e4d98972e15a6493151a17064b63e2fcab7cba3e979f` |
 | C6 standard no_ota | 971136 | `65c59d313b5081265b8612be8539ef9a115036eb5efc9489b3c55f336e8c0b48` |
+
+## Primo collaudo M1c autorizzato
+
+- **PASS preflight e installazione** riconfermati i due dump integrali C6 e le catture S3. Installate solo app negli slot `0x10000` C6 e `0x310000` S3. L'utility e l'app radio sono state rilette e confrontate byte per byte su entrambe le schede. Usato un avvio C6 protetto con `--wrap=initArduino` per fermarsi se NVS non si inizializza. La build radio usa la configurazione Wi-Fi in RAM.
+- **PASS provisioning** entrambe le utility hanno restituito `RADIO_PROVISION_OK` e il controllo offline della NVS riletta ha ritrovato i record attesi. Al primo avvio S3 il reset USB via RTS era rimasto in download: NVS e otadata erano invariati. Il reset completo watchdog S3 ha avviato correttamente l'utility. Nessuna ripetizione alla cieca dell'invio NVS.
+- **PASS radio DRB2, FAIL DRA1 con PMK distinte** entrambi i peer riportano `configured=1 aligned=1` sul canale 6. Nel tentativo con diagnostica di trasporto il radar ha accettato 57 beacon DRB2 e ottenuto 69 esiti TX di livello MAC riusciti per frame DRA1. Il C6 ha mostrato zero frame da 80 byte nella callback e zero conferme DRA1. Entrambi sono rimasti in `state=2`. Il driver TX da solo non dimostra la ricezione DRA1.
+- **PASS verifica NVS** record di banco verificati senza esporre valori. Le sole voci preesistenti differenti rilevate dal parser NVS appartengono al Wi-Fi/PHY. Sul C6 bootloader, tabella, otadata, SPIFFS e coredump coincidono con la cattura pre-installazione. S3 otadata coincide con il preflight.
+- **PASS software** nove gruppi host e fixture. Il test TX distingue esito API, esito callback, peer mancante, buffer pieno e frame scaduto. Corretto il confronto con il MAC di fabbrica sul C6 usando un buffer EUI-64.
+
+### Profilo di banco con PMK comune derivata
+
+- **PASS DRA1 su canale 6** con `M1C_LINK_PMK_PROBE=1` su entrambe le schede. Controllo applicativo HMAC e peer ESP-NOW con LMK/cifratura attivi. NVS di provisioning mantenuta senza reinviare i record. Entrambi Paired per 60 s, conferme S3 da 1 a 21 e C6 da 2 a 22. Nessun drop o stallo nel campione.
+- **PASS fixture e canale** un ACK scartato al radar ha causato un retry e un duplicato riconosciuto dalla sfera. Un probe con HMAC alterato ha incrementato `auth_rejected` sul C6. Il passaggio del solo S3 al canale 1 ha portato entrambi a Lost e il ritorno al canale 6 ha rigenerato il pairing. Un probe della sessione precedente ha incrementato `stale_session` sul C6.
+- **PASS riavvii e recupero** C6 tenuto in ROM per almeno 20 s, radar in Lost, poi ritorno a Paired su entrambi all'avvio del C6. Riavvio separato S3 con C6 acceso, nuova sessione e conferme riprese. Nessun reinvio delle associazioni.
+- **Build installate e rilette byte per byte** S3 in OTA1 da 880768 byte, SHA-256 `0464142cc572571f13df612c75290f78f42f387d2f604b0aafac13a51503df64`; C6 in app0 da 964800 byte, SHA-256 `a597e6940e72e67c7be252c0ec4efae2cfc5dadfe906f40d6681f4f48021f8d0`. I metadati OTA S3 sono rimasti invariati.
+- **PASS integrità finale** S3 bootloader/tabella, OTA0, otadata, FAT e coda di OTA1 oltre l'area toccata coincidono con le copie di riferimento. C6 bootloader/tabella, otadata, SPIFFS, coredump e coda di app0 coincidono. Le due NVS sono state lette due volte e conservano i record di banco. Al di fuori del pairing le sole differenze logiche riguardano Wi-Fi/PHY. Dopo il controllo entrambe le schede sono tornate Paired sul canale 6.
+- **Aperto** consolidare la configurazione PMK dei binari standard e verificarla con i record previsti per produzione. Vista separata del bit Protected/CCMP tramite sniffer e ripristino effettivo dei firmware originali **NOT RUN**.
