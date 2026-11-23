@@ -40,7 +40,8 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 
 ## M3 — Sfera prototipo e consumi (1 unità prima di replicare)
 - Verificare sul banco IMR14500 500 mAh + protezione PCM 1S, carica, connessioni, massimi di corrente e tensione; non assumere protezioni integrate.
-- Grove vibrazione con driver e 3 WS2812B; nessun buzzer. Test logica attuatori **solo dopo** pairing e verifica elettrica. Interruttore; sleep e wake; autonomia misurata.
+- **M3a** driver Grove C6 su D4 con impulso breve all’avvio riuscito e comando USB a durata limitata. Configurazione per tre WS2812B su D5, disabilitata. Test host e build C6 radio/DEV passati. Verifiche elettriche e radio sotto carico da eseguire al banco autorizzato.
+- Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 
 ## M4 — Funzioni opzionali e consolidamento

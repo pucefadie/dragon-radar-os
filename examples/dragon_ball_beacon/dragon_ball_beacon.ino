@@ -38,6 +38,36 @@ static Dra1UserLed userLed;
 #if DRAGON_RADIO_CHANNEL < 1 || DRAGON_RADIO_CHANNEL > 13
 #error DRAGON_RADIO_CHANNEL must be between 1 and 13 and legal for your region
 #endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE && ARDUINO_USB_CDC_ON_BOOT && DRAGON_BALL_ID == 1
+#define SPHERE_MOTOR_USB_TEST 1
+#include "sphere_motor_rmt.h"
+#include "sphere_rgb.h"
+static_assert(D4 == kSphereMotorPin && D5 == sphereRgb::kChain.dataPin,
+              "XIAO C6 motor/RGB pins do not match board profile");
+static_assert(D4 != LED_BUILTIN && D4 != WIFI_ENABLE && D4 != WIFI_ANT_CONFIG &&
+              D5 != LED_BUILTIN && D5 != WIFI_ENABLE && D5 != WIFI_ANT_CONFIG && D4 != D5 &&
+              !sphereRgb::kChain.enabled, "Actuator configuration conflicts with XIAO hardware");
+static SphereMotorRmt motorOutput;
+static SphereMotor<SphereMotorRmt> motor(motorOutput);
+static MotorTestCommand motorCommand;
+
+static void pollMotorConsole() {
+  if (!Serial) {
+    motorCommand.reset();
+    return;
+  }
+  for (unsigned budget = 32; budget && Serial.available(); --budget) {
+    if (!motorCommand.consume(char(Serial.read()))) continue;
+    const auto result = motor.request(millis());
+    switch (result) {
+      case MotorTestResult::Started: Serial.println("MOTOR_TEST STARTED 120 ms"); break;
+      case MotorTestResult::Busy:
+      case MotorTestResult::CoolingDown: Serial.println("MOTOR_TEST WAIT"); break;
+      case MotorTestResult::Disabled: Serial.println("MOTOR_TEST DISABLED"); break;
+    }
+  }
+}
+#endif
 #if RADIO_DEV_INSECURE
 struct DevPacket { uint8_t mac[6], bytes[RADIO_FRAME_SIZE]; int8_t rssi; };
 static QueueHandle_t devQueue;
@@ -60,6 +90,9 @@ static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
 static uint32_t bootId=0, sequence=0, nextBeacon=0;
 void setup() {
+#if SPHERE_MOTOR_USB_TEST
+  const bool motorLow = sphereMotorSafeLow();
+#endif
 #if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
   // Preload the inactive level before enabling the active-low output.
   gpio_set_level(kUserLedPin, HIGH);
@@ -95,13 +128,29 @@ void setup() {
 #else
   if (!radioTx.init(false) || esp_now_register_send_cb(txDone)!=ESP_OK) { ready=false; return; }
 #if DRAGON_BALL_ID == 1
-  if (esp_now_register_recv_cb(secureReceive)==ESP_OK) secure.begin(false);
+  if (esp_now_register_recv_cb(secureReceive)==ESP_OK) {
+    const bool secureReady = secure.begin(false);
+#if SPHERE_MOTOR_USB_TEST
+    if (motorLow && secureReady && motor.begin() &&
+        motor.request(millis(), kMotorStartupPulseMs) == MotorTestResult::Started)
+      Serial.println("MOTOR_TEST READY (USB only), startup pulse 60 ms");
+#else
+    (void)secureReady;
+#endif
+  }
 #endif
 #endif
   Serial.printf("Dragon beacon ID=%d channel=%d (broadcast, not authenticated)\n",DRAGON_BALL_ID,DRAGON_RADIO_CHANNEL);
 }
 void loop() {
+#if SPHERE_MOTOR_USB_TEST
+  if (!ready) motor.disable();
+  motor.tick(millis());
+#endif
   if (!ready) { delay(100); return; }
+#if SPHERE_MOTOR_USB_TEST
+  pollMotorConsole();
+#endif
   #if RADIO_DEV_INSECURE
   static bool lastOnline=false;
   devSphere->tick(millis());

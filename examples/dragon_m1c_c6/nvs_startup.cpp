@@ -7,9 +7,15 @@
 
 #if !M1C_C6_PROVISION
 #include <WiFi.h>
+#if defined(ARDUINO_XIAO_ESP32C6) && ARDUINO_USB_CDC_ON_BOOT
+#include "sphere_motor_gpio.h"
+#endif
 #endif
 
 extern "C" void __wrap_initArduino() {
+#if !M1C_C6_PROVISION && defined(ARDUINO_XIAO_ESP32C6) && ARDUINO_USB_CDC_ON_BOOT
+  sphereMotorSafeLow();
+#endif
   const esp_err_t result = nvs_flash_init();
   if (result != ESP_OK) {
     Serial.begin(115200);

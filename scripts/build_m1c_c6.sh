@@ -25,7 +25,7 @@ cp "$project/examples/$sketch/$sketch.ino" "$project/examples/dragon_m1c_c6/nvs_
 cp "$project/include/"{beacon_protocol,dev_radio,dev_radio_tx,radio_link,secure_radio,secure_radio_espnow,secure_radio_provision}.h "$stage/"
 cp "$project/src/"{beacon_protocol,dev_radio,radio_link,secure_radio}.cpp "$stage/"
 if [[ "$role" == radio ]]; then
-  cp "$project/examples/$sketch/dra1_user_led.h" "$stage/"
+  cp "$project/examples/$sketch/"{dra1_user_led,sphere_motor,sphere_motor_gpio,sphere_motor_rmt,sphere_rgb}.h "$stage/"
   printf '#pragma once\n#define DRAGON_BALL_ID 1\n#define DRAGON_RADIO_CHANNEL 6\n' >"$stage/beacon_config.h"
 fi
 cli="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
