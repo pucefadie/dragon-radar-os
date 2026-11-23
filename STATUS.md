@@ -10,6 +10,7 @@
 | **PASS storico — DRB2 fisico, solo ricezione** | Ricevitore S3 minimale: 10 beacon validi confermati sul canale 6, senza errori CRC nei report completi, NVS immutata. Al termine OTA1 selezionato con sequenza 4 VALID, OTA0 integro. Non è una prova DRA1. |
 | **PASS — M1c fisico, profilo banco** | Provisioning e DRA1 verificati su S3/C6 con PMK comune derivata. Handshake, ACK/retry, tag errato, replay, perdita e recupero verificati. |
 | **COMPLETATA — M1d, DRC1** | Percorso radio standard nel profilo di banco, 60 s Paired sul canale 6, 20 nuove conferme applicative per scheda. Recupero dopo entrambi i riavvii e associazioni DRC1 identiche dopo la prova. |
+| **COMPLETATA — M2a, UI Trial offline** | Radar e C6 M1d Paired per 60 s sul canale 6, radar senza AP, conferme in aumento. NVS e funzionamento della UI verificati nel collaudo precedente dello stesso candidato. |
 
 ## Audit storico S3 con batteria e motore collegati
 
@@ -32,9 +33,7 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Confermare il C6 M1d in esecuzione normale sul canale 6.
-2. Avviare il radar con UI Trial offline e verificare DRA1 Paired per 60 s con conferme in aumento.
-3. Verificare perdita e recupero del collegamento se eseguibili nelle condizioni della prova.
+M2a è chiusa. Per ripetere il campione, avviare normalmente il C6 M1d e il radar UI Trial offline, verificare STA senza AP e confrontare le conferme DRA1 per 60 s sul canale 6.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -195,3 +194,9 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS NVS post-avvio** due letture ROM identiche. DRC1 coincide con il backup, DRC2 assente e metadati STA invariati rispetto a prima del flash. Le differenze logiche sono cinque record PHY consentiti e `radar_os/brightness`, modificato intenzionalmente dall'operatore durante la prova.
 - **PASS integrità** bootloader, tabella, OTA0, `otadata` e immagine OTA1 verificati dopo l'avvio. Fine prova con S3 in ROM, senza ulteriori avvii o rollback. Backup e log conservati fuori da Git.
 - **Diagnosi C6 in sola lettura** COM12 corrisponde al C6 del banco. Nessuna telemetria applicativa e risposta positiva dalla ROM in modalità download, senza stub RAM. Canale, stato ESP-NOW e contatori correnti saranno verificabili quando l'app M1d sarà in esecuzione. Il riferimento M1d è 60 s Paired sul 6, conferme S3 21 → 41 e C6 66 → 86.
+
+### M2a — prova DRA1 conclusiva
+
+- **PASS DRA1** dopo il ricollegamento USB del C6 senza BOOT, COM12 ha restituito telemetria applicativa M1d con DRC1. S3 UI Trial e C6 M1d Paired sul canale 6 per 60 s. Conferme S3 1 → 20 su 24 campioni e C6 2 → 22 su 13 campioni nell'acquisizione passiva. Zero nuovi scarti RX, rifiuti di autenticazione, retry o stalli TX. Il radar era in STA senza AP.
+- **PASS avvio S3** inizializzazione AMOLED e touch confermata via seriale. La verifica NVS e l'uso di menu, animazioni e luminosità fanno riferimento alla prova precedente dello stesso candidato.
+- **NOT RUN** perdita e recupero provocati nel campione M2a. Il recupero rimane documentato nel collaudo M1d. Entrambi i dispositivi sono rimasti in esecuzione al termine dell'acquisizione.
