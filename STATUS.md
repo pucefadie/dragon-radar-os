@@ -32,9 +32,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 
 ## Prossime tre azioni
 
-1. Verificare in M2a il percorso che ha salvato `radar_os/brightness` durante il collaudo offline. Il radar resta in ROM con il nuovo UI Trial installato.
-2. Alla prossima sessione autorizzata, confermare il C6 M1d in esecuzione normale sul canale 6 e ripetere la prova DRA1 da 60 s e la verifica di perdita e recupero.
-3. Ripetere il confronto logico NVS e completare la verifica visiva di display e touch.
+1. Confermare il C6 M1d in esecuzione normale sul canale 6.
+2. Avviare il radar con UI Trial offline e verificare DRA1 Paired per 60 s con conferme in aumento.
+3. Verificare perdita e recupero del collegamento se eseguibili nelle condizioni della prova.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -190,7 +190,8 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 ### M2a — prova fisica del candidato offline
 
 - **PASS programmazione e readback** COM11 confermata in ROM. Copia corrente integrale di OTA1 da 3 MiB acquisita e confrontata con la ricostruzione dal readback precedente. Scritto solo il candidato da 1.772.704 byte in OTA1 a `0x310000`, con ultimo settore fino a `0x4c0fff`. Rilettura identica byte per byte e SHA-256 confermato.
-- **PASS avvio e radio offline** console stabile per 70 s, canale 6, STA senza AP, zero connessioni o disconnessioni STA. Il firmware riporta AMOLED e controller touch inizializzati, batteria scollegata e motore SafeOff. Immagine visibile e risposta ai tocchi **NOT RUN**.
+- **PASS avvio e radio offline** console stabile per 70 s, canale 6, STA senza AP, zero connessioni o disconnessioni STA. Il firmware riporta AMOLED e controller touch inizializzati, batteria scollegata e motore SafeOff. L'operatore ha confermato il funzionamento di menu e animazioni e ha modificato la luminosità dalla UI durante la prova.
 - **BLOCCATO DRA1 Paired e recupero** DRC1 caricato, PMK e peer inizializzati, `aligned=1 state=2 confirmed=0`. Il radar ha registrato 133 invii con consegna fallita e zero callback DRA1 RX. Nessuna telemetria applicativa dalla lettura passiva del C6. Il collegamento richiede il C6 operativo sul canale 6. Il C6 non è stato riavviato né programmato.
-- **FAIL vincolo NVS post-avvio** due letture ROM identiche. DRC1 coincide con il backup, DRC2 assente e metadati STA invariati rispetto a prima del flash. Cambiati cinque record logici PHY e il valore `radar_os/brightness`. Il valore della luminosità è fuori dalle variazioni ammesse. La causa della modifica durante la sessione resta da verificare.
+- **PASS NVS post-avvio** due letture ROM identiche. DRC1 coincide con il backup, DRC2 assente e metadati STA invariati rispetto a prima del flash. Le differenze logiche sono cinque record PHY consentiti e `radar_os/brightness`, modificato intenzionalmente dall'operatore durante la prova.
 - **PASS integrità** bootloader, tabella, OTA0, `otadata` e immagine OTA1 verificati dopo l'avvio. Fine prova con S3 in ROM, senza ulteriori avvii o rollback. Backup e log conservati fuori da Git.
+- **Diagnosi C6 in sola lettura** COM12 corrisponde al C6 del banco. Nessuna telemetria applicativa e risposta positiva dalla ROM in modalità download, senza stub RAM. Canale, stato ESP-NOW e contatori correnti saranno verificabili quando l'app M1d sarà in esecuzione. Il riferimento M1d è 60 s Paired sul 6, conferme S3 21 → 41 e C6 66 → 86.
