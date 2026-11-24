@@ -334,3 +334,9 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS installazione sequenziale** S3, 1.777.600 byte a `0x310000`. C6, 979.584 byte a `0x10000`. Entrambe le immagini rilette e confrontate byte per byte prima dell'avvio. Verificati invariati NVS, otadata, bootloader e tabelle partizioni. Sullo S3 restano integri OTA0 e coda OTA1, con OTA1 selezionato come prima.
 - **PASS avvio e radio** DRA1 Paired su entrambi per 60,03 s, canale 6 e S3 senza AP. Conferme S3 2 → 22 e C6 2 → 21. Zero nuovi drop, retry probe, rifiuti di autenticazione, errori di consegna o stalli TX. Inizializzazione AMOLED e controller touch riuscita. RSSI M2b.1 presente via seriale senza nuova taratura. Il comando motore risultava inattivo durante il campione.
 - **PENDING prova motore supervisionata** prossimo passo C6 a scheda spenta, collegare il solo Grove e alimentare via USB. L'operatore verifica impulso di avvio, pulsante Debug, conferma, rifiuto entro cooldown e nuovo comando dopo attesa. Durate elettriche, transitori GPIO22 durante reset e ROM e tenuta della 3V3 restano da misurare. Log e backup in locale.
+
+### M3b — prova touch in attesa del primo comando
+
+- **PASS avvio motorino osservato** l'operatore ha confermato un impulso breve dopo il ricollegamento del Grove e l'alimentazione solo USB.
+- **PASS stabilità dopo il ricollegamento** 120 s di monitoraggio seriale senza reset inattesi nella finestra, DRA1 Paired e conferme S3 30 → 69, C6 2 → 40. I contatori di retry ed errori di consegna già presenti al primo campione, dopo la riaccensione del C6, non sono cresciuti.
+- **NOT RUN** prova del pulsante, esito del comando, cooldown e impulso successivo. Lo stato applicativo è rimasto inattivo durante la finestra. Il prossimo campione richiede i tocchi dell'operatore nella pagina 13/13 di Debug. Restano aperte le verifiche strumentali M3a.
