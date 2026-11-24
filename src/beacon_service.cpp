@@ -160,6 +160,7 @@ ProximitySnapshot beaconServiceProximity() {
 void beaconServiceSetProximitySuspended(bool suspended) {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   proximity.setSuspended(suspended,millis());
+  if (suspended) secure.cancelMotorRequest();
 #else
   (void)suspended;
 #endif
@@ -172,6 +173,19 @@ void beaconServiceConfirmOrRestartSearch() {
     proximity.confirmFound(now);
 #endif
 }
+void beaconServiceRequestSphereMotor() {
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) secure.requestMotor(millis());
+#endif
+}
+
+SecureMotorStatus beaconServiceSphereMotorStatus() {
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) return secure.motorStatus();
+#endif
+  return SecureMotorStatus::Unavailable;
+}
+
 #if M1C_BENCH_FIXTURE
 bool beaconServiceFixtureCommand(const char *command, Stream &out) {
   M1cRadioAction action=M1cRadioAction::None;
@@ -212,6 +226,7 @@ void beaconServicePrint(Stream &out) {
   }
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   secure.print(out,millis());
+  out.printf("DRA1_SPHERE_MOTOR_STATUS=%u\n",unsigned(beaconServiceSphereMotorStatus()));
 #if CONFIG_IDF_TARGET_ESP32S3
   const auto signal=beaconServiceProximity();
   if (signal.seen)

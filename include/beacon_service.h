@@ -11,6 +11,8 @@ SecureLinkStatus beaconServiceSecureLinkStatus();
 ProximitySnapshot beaconServiceProximity();
 void beaconServiceSetProximitySuspended(bool suspended);
 void beaconServiceConfirmOrRestartSearch();
+void beaconServiceRequestSphereMotor();
+SecureMotorStatus beaconServiceSphereMotorStatus();
 #if M1C_BENCH_FIXTURE
 bool beaconServiceFixtureCommand(const char *command, Stream &out);
 #endif

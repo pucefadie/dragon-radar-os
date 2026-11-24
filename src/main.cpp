@@ -948,8 +948,14 @@ void loop() {
     }
   }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings && gesture.type == Gesture::Tap) appSettingsTap(gesture.x, gesture.y);
-  if (!g_apps.launcherOpen() && g_apps.active() == AppId::Debug && gesture.type == Gesture::Hold) motorTriggerShortPulse();
-  g_apps.gesture(gesture);
+  const bool sphereMotorPage = !g_debugLegacy && !g_apps.launcherOpen() &&
+                               g_apps.active() == AppId::Debug && g_apps.debugPage() == DEBUG_SPHERE_MOTOR_PAGE;
+  if (sphereMotorPage && debugSphereMotorTap(gesture)) beaconServiceRequestSphereMotor();
+  else {
+    if (!sphereMotorPage && !g_apps.launcherOpen() && g_apps.active() == AppId::Debug &&
+        gesture.type == Gesture::Hold) motorTriggerShortPulse();
+    g_apps.gesture(gesture);
+  }
   if (buttonConsumeShortPress()) { if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar) appRadarZoom(); else if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings) appSettingsNext(); else g_apps.shortPress(); }
   if (buttonConsumeLongPress()) g_apps.longPress();
   if (appSettingsConsumeStandby() && !otaServiceActive()) {

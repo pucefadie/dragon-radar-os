@@ -14,6 +14,11 @@ class SecureEspNow final : private SecureRadioIo {
  public:
   explicit SecureEspNow(DevRadioTx &tx) : tx_(tx) {}
 
+  bool requestMotor(uint32_t now) { return radio_ && aligned_ && !tx_.stalled() && radio_->requestMotor(now); }
+  void cancelMotorRequest() { if (radio_) radio_->cancelMotorRequest(); }
+  SecureMotorStatus motorStatus() const { return radio_ ? radio_->motorStatus() : SecureMotorStatus::Unavailable; }
+  void setMotorHandler(SecureMotorHandler handler) { if (radio_) radio_->setMotorHandler(handler); }
+
   // Only a deliberately provisioned one-sphere link may register an encrypted peer.
   bool begin(bool controller, bool (*prepareChannel)(uint8_t) = nullptr) {
     if (radio_) return true;
@@ -74,8 +79,8 @@ class SecureEspNow final : private SecureRadioIo {
     memcpy(p.bytes,bytes,sizeof(p.bytes));
 #if CONFIG_IDF_TARGET_ESP32S3
     p.rssi=info->rx_ctrl ? info->rx_ctrl->rssi : 0;
-    p.received=millis();
 #endif
+    p.received=millis();
     if (xQueueSend(queue_,&p,0)!=pdTRUE) ++drop_;
   }
   void tick(uint32_t now
@@ -90,15 +95,17 @@ class SecureEspNow final : private SecureRadioIo {
     for (unsigned n=0;n<8 && xQueueReceive(queue_,&p,0)==pdTRUE;++n) {
       if (aligned_) {
         ++rxProcessed_;
+        const uint32_t receivedAge=millis()-p.received;
 #if CONFIG_IDF_TARGET_ESP32S3
-        const auto event=radio_->receive(p.source,p.bytes,sizeof(p.bytes),now);
+        const auto event=radio_->receive(p.source,p.bytes,sizeof(p.bytes),now,receivedAge);
         if (observe && event!=SecureRxEvent::None) observe(event,p.rssi,p.received);
 #else
-        radio_->receive(p.source,p.bytes,sizeof(p.bytes),now);
+        radio_->receive(p.source,p.bytes,sizeof(p.bytes),now,receivedAge);
 #endif
       }
     }
     if (aligned_) radio_->tick(now);
+    else cancelMotorRequest();
   }
   SecureLinkStatus linkStatus(uint32_t now) const {
     return radio_ ? radio_->linkStatus(now, aligned_) : SecureLinkStatus::Unavailable;
@@ -141,8 +148,8 @@ class SecureEspNow final : private SecureRadioIo {
     uint8_t source[6],bytes[SECURE_RADIO_SIZE];
 #if CONFIG_IDF_TARGET_ESP32S3
     int8_t rssi;
-    uint32_t received;
 #endif
+    uint32_t received;
   };
   static SecureRecordRead readRecord(void *storage,const char *key,uint8_t *bytes,size_t &length) {
     const nvs_handle_t handle=*static_cast<nvs_handle_t*>(storage);
@@ -161,6 +168,9 @@ class SecureEspNow final : private SecureRadioIo {
   void random(uint8_t *bytes,size_t size) override { esp_fill_random(bytes,size); }
   bool send(const uint8_t *mac,const uint8_t *data,size_t size) override {
     return aligned_ && tx_.enqueue(mac,data,size);
+  }
+  bool sendMotor(const uint8_t *mac,const uint8_t *data,size_t size) override {
+    return aligned_ && tx_.enqueue(mac,data,size,300);
   }
   DevRadioTx &tx_;
   alignas(SecureRadio) uint8_t storage_[sizeof(SecureRadio)]{};

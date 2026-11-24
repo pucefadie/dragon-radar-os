@@ -1,7 +1,15 @@
 #pragma once
 #include <stdint.h>
 #include "gesture_manager.h"
-constexpr uint8_t DEBUG_PAGE_COUNT = 12;
+constexpr uint8_t DEBUG_SPHERE_MOTOR_PAGE = 12;
+constexpr uint8_t DEBUG_PAGE_COUNT = DEBUG_SPHERE_MOTOR_PAGE+1;
+constexpr int16_t DEBUG_SPHERE_MOTOR_X=82, DEBUG_SPHERE_MOTOR_Y=220;
+constexpr int16_t DEBUG_SPHERE_MOTOR_WIDTH=302, DEBUG_SPHERE_MOTOR_HEIGHT=44;
+inline bool debugSphereMotorTap(const GestureEvent &event) {
+  return event.type == Gesture::Tap &&
+         event.x >= DEBUG_SPHERE_MOTOR_X && event.x < DEBUG_SPHERE_MOTOR_X+DEBUG_SPHERE_MOTOR_WIDTH &&
+         event.y >= DEBUG_SPHERE_MOTOR_Y && event.y < DEBUG_SPHERE_MOTOR_Y+DEBUG_SPHERE_MOTOR_HEIGHT;
+}
 enum class AppId : uint8_t { Radar, Audiobookshelf, Settings, Debug };
 class AppManager {
  public:

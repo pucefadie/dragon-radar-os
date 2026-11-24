@@ -40,7 +40,8 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 
 ## M3 — Sfera prototipo e consumi (1 unità prima di replicare)
 - Verificare sul banco IMR14500 500 mAh + protezione PCM 1S, carica, connessioni, massimi di corrente e tensione; non assumere protezioni integrate.
-- **M3a** driver Grove C6 su D4 con impulso breve all’avvio riuscito e comando USB a durata limitata. Configurazione per tre WS2812B su D5, disabilitata. Test host e build C6 radio/DEV passati. Verifiche elettriche e radio sotto carico da eseguire al banco autorizzato.
+- **M3a PASS funzionale via USB** impulso di avvio, comando seriale, cooldown e stabilità DRA1 sotto carico verificati. Durate elettriche, transitori di reset e tenuta della 3V3 restano da misurare. Tre WS2812B predisposti su D5 e disabilitati.
+- **M3b** comando manuale di vibrazione dal Debug del radar, autenticato nella sessione DRA1. Test host e build S3/C6 completati. Verifica fisica richiesta dopo installazione autorizzata di entrambe le app.
 - Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 

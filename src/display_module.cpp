@@ -1609,6 +1609,32 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
   char heading[32]; snprintf(heading,sizeof(heading),"DEBUG %u/%u",(unsigned)(page%DEBUG_PAGE_COUNT)+1,(unsigned)DEBUG_PAGE_COUNT);
   drawCenteredText(d,65,heading,RADAR_COLOR_GRID_BRIGHT,2);
   const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="",detail[48]="";
+  if (page == DEBUG_SPHERE_MOTOR_PAGE) {
+    const auto link = beaconServiceSecureLinkStatus();
+    const auto status = beaconServiceSphereMotorStatus();
+    const bool enabled = link == SecureLinkStatus::Paired && status != SecureMotorStatus::Pending;
+    drawCenteredText(d,120,"VIBRAZIONE SFERA",RADAR_COLOR_GRID_BRIGHT,2);
+    drawCenteredText(d,167,secureLinkLabel(link),RADAR_COLOR_WHITE,2);
+    d->fillRoundRect(DEBUG_SPHERE_MOTOR_X,DEBUG_SPHERE_MOTOR_Y,DEBUG_SPHERE_MOTOR_WIDTH,
+                     DEBUG_SPHERE_MOTOR_HEIGHT,8,enabled ? RADAR_COLOR_GRID_MID : RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,232,"FAI VIBRARE LA SFERA",enabled ? RADAR_COLOR_WHITE : RADAR_COLOR_GRAY,2);
+    const char *result = "";
+    switch (status) {
+      case SecureMotorStatus::Idle: break;
+      case SecureMotorStatus::Pending: result="IN ATTESA DELLA SFERA"; break;
+      case SecureMotorStatus::Accepted: result="COMANDO ACCETTATO"; break;
+      case SecureMotorStatus::CoolingDown: result="ATTENDI PRIMA DI RIPROVARE"; break;
+      case SecureMotorStatus::Unavailable: result="COMANDO NON DISPONIBILE"; break;
+      case SecureMotorStatus::Unconfirmed: result="ESITO NON CONFERMATO"; break;
+    }
+    drawCenteredText(d,287,result,RADAR_COLOR_YELLOW,2);
+    if (status == SecureMotorStatus::Accepted)
+      drawCenteredText(d,315,"VIBRAZIONE DA VERIFICARE",RADAR_COLOR_WHITE,1);
+    drawCenteredText(d,355,"TOCCA QUI: PAGINA",RADAR_COLOR_GRAY,2);
+    d->fillRoundRect(207,432,52,5,2,RADAR_COLOR_GRID_MID);
+    flushDisplay();
+    return;
+  }
   switch(page%DEBUG_PAGE_COUNT) {
     case 0: title="SISTEMA"; snprintf(a,sizeof(a),"BUSSOLA: %s",snap.bmm_online?"OK":"OFF"); snprintf(b,sizeof(b),"IMU: %s",snap.imu_online?"OK":"OFF"); snprintf(c,sizeof(c),"PMIC: %s",snap.pmic_online?"OK":"OFF"); break;
     case 1: title="BUSSOLA"; snprintf(a,sizeof(a),"HEADING %.0f",snap.heading_deg); snprintf(b,sizeof(b),"CAMPO %.1f uT",snap.mag_b_ut); snprintf(c,sizeof(c),"%s %s",snap.mag_calibrated?"CAL":"RAW",(snap.mag_b_ut>=15 && snap.mag_b_ut<=120)?"":"FUORI RANGE"); break;

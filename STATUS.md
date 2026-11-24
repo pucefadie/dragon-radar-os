@@ -31,11 +31,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | C6 standard no_ota | 970880 | `89ec01d90823313771fe393489384f512bd295670d7f7f1630a5563e19f9b61f` |
 | C6 provisioning no_ota | 263008 | `705a737d66416b8fff38a276d79981177f50ea5f208485db3603b931044b7d64` |
 
-## Prossime azioni M3a
+## Prossime azioni M3b
 
-1. A banco spento, verificare cablaggio Grove, assenza di corti e livello inattivo di D4 nelle condizioni di reset previste.
-2. Dopo autorizzazione, identificare il C6 in ROM, acquisire il backup corrente e installare la sola app dopo verifica della tabella.
-3. Con il radar collegato via DRA1, misurare l'impulso di avvio e quello USB e controllare LED USER, alimentazione e contatori prima e dopo.
+1. Ottenere autorizzazione al collaudo e acquisire backup live per entrambi i dispositivi, con Grove e batteria scollegati durante il preflight.
+2. Programmare e verificare le sole app S3 OTA1 e C6 app0 dopo i controlli di identità, layout e compatibilità.
+3. Con l'operatore presente e la sfera alimentata solo via USB, provare il tasto Debug e verificare conferma, impulso singolo, rifiuto in cooldown e stabilità DRA1.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -314,3 +314,16 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS via seriale** su COM12 il primo comando ha risposto `MOTOR_TEST STARTED 120 ms`. Il secondo, inviato a 453 ms, ha risposto `MOTOR_TEST WAIT`. Il test sotto carico ha verificato il rifiuto entro cooldown. La riabilitazione al limite dei 3 s resta coperta dal test host.
 - **PASS DRA1 durante la prova** Paired durante 60,03 s dal comando, con 12 campioni successivi e conferme 12 → 32. Callback RX 43 → 63 e consegne TX 31 → 51. Nessun incremento di retry, duplicati, drop RX, rifiuti di autenticazione o errori di consegna. Nessun reset, brownout o stallo TX osservato nella telemetria. C6 sul canale 6 già verificato al boot M3a.
 - **NOT RUN misure strumentali** durata elettrica esatta degli impulsi, transitori D4 durante reset e ROM e tenuta della 3V3 sotto carico. Indicazione del LED USER non osservata in questo campione. Firmware S3 e C6 e associazione invariati durante il test. Nessun flash o reset richiesto. Log privati.
+
+
+## M3b — vibrazione remota manuale via DRA1
+
+- **M3a PASS funzionale via USB** confermati gli impulsi di avvio e test USB e il cooldown osservato. Restano aperte le misure strumentali di durata, D4 durante reset e ROM e tenuta della 3V3.
+- Il radar richiede un impulso da 120 ms solo dal tasto **Debug → Vibrazione sfera → Fai vibrare la sfera**. La sfera usa lo stesso driver RMT su GPIO22 e lo stesso cooldown della prova USB. L'impulso di avvio da 60 ms resta disponibile. Ricerca RSSI, LED USER, antenna, pairing, alimentazione e predisposizione RGB disabilitata conservati.
+- Il risultato applicativo è autenticato e correlato al comando. La sfera riusa il risultato dell'ultima richiesta nei retry e scarta richieste precedenti o di altre sessioni. Il radar distingue accettato, cooldown, indisponibile ed esito non confermato. L'operatore verifica la vibrazione fisica. Nessuna misura RSSI deriva da un comando o dal risultato.
+- **PASS host** 12 esecuzioni, con `-Wall -Wextra -Werror` e ASan/UBSan per DRA1 e prossimità. Coperti pulsante e navigazione, HMAC e peer errati, coda RX scaduta, perdita della risposta, duplicati e replay, ACK di probe separato, risultati appena ricevuti o in ritardo, timeout, cooldown e regressioni LED USER e M2b.1.
+- **PASS build** S3 UI Trial offline e C6 radio `no_ota` con Arduino ESP32 3.3.12. Verificati target, checksum, hash interno, marcatori, sorgenti di staging e tabelle corrispondenti a quelle lette in ROM. Binari, ELF, log e manifest SHA-256 fuori da Git.
+  - S3, 1.777.600 byte, SHA-256 `4bdff1f8837deba005d1164dd86b5e0e8e72350e715fb2a6731c5e2210c88653`, OTA1 a `0x310000`, ultimo settore fino a `0x4c1fff`.
+  - C6, 979.584 byte, SHA-256 `856babf41f4762ec0e2c4eb2b0b5a93624bf9e383788f7d12eacb1072cdbe425`, app0 a `0x10000`, ultimo settore fino a `0xfffff`.
+- **Baseline conservate** app S3 M2b installata (SHA-256 `683c4c316fd7a0e6427c1a7029ef7810efa3dc96cdca4960352dd1929b226a76`), candidato S3 M2b.1 (`8752e14abd7d229edf5e08f068b3097a743d33eb26826fb9aab70fb6143360a9`) e app C6 M3a installata (`eceb231ffb197efc2b16d0b8a7c978552fa6124af9bf3b01cb54945d8e4551a5`).
+- **NOT RUN banco M3b** nessun flash. Serve un'installazione autorizzata di entrambe le app. La taratura fisica M2b.1 è rinviata.

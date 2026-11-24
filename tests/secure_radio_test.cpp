@@ -195,7 +195,116 @@ static void testBenchFixture() {
 }
 #endif
 
+static unsigned motorCalls;
+static SecureMotorStatus motorResponse;
+
+static SecureMotorStatus testMotorHandler(uint32_t) {
+  ++motorCalls;
+  return motorResponse;
+}
+
+static void testMotorCommand() {
+  const uint8_t radarMac[6]{2}, sphereMac[6]{4}, unknownMac[6]{6};
+  Wire radarWire(20), sphereWire(50);
+  const auto config=make(4);
+  SecureRadio radar(radarWire,true,config), sphere(sphereWire,false,make(2));
+  sphere.setMotorHandler(testMotorHandler);
+  motorCalls=0;
+  motorResponse=SecureMotorStatus::Accepted;
+
+  const auto toSphere=[&](const Frame &frame,uint32_t now) {
+    return sphere.receive(radarMac,frame.data(),frame.size(),now);
+  };
+  const auto toRadar=[&](const Frame &frame,uint32_t now) {
+    return radar.receive(sphereMac,frame.data(),frame.size(),now);
+  };
+  const auto handshake=[&](uint32_t now) {
+    radar.tick(now);
+    toSphere(radarWire.take(),now+1);
+    toRadar(sphereWire.take(),now+2);
+    radar.tick(now+2);
+    toSphere(radarWire.take(),now+3);
+    toRadar(sphereWire.take(),now+4);
+  };
+  assert(!radar.requestMotor(0) && !sphere.requestMotor(0));
+  handshake(0);
+  assert(radar.requestMotor(10) && !radar.requestMotor(11));
+  radar.tick(12);
+  const auto request=radarWire.take(), probe=radarWire.take();
+  auto corrupt=request;
+  corrupt.back()^=1;
+  toSphere(corrupt,13);
+  sphere.receive(unknownMac,request.data(),request.size(),14);
+  sphere.receive(radarMac,request.data(),request.size(),15,1000);
+  assert(motorCalls==0 && sphereWire.queue.empty() && sphere.diagnostics().auth_rejected==1);
+  auto reflected=request;
+  reflected[5]=1; reflected[6]=0;
+  assert(radarWire.sign(config.auth,reflected.data(),48,reflected.data()+48));
+  assert(toRadar(reflected,16)==SecureRxEvent::None && radar.motorStatus()==SecureMotorStatus::Pending);
+  assert(toSphere(request,17)==SecureRxEvent::None && motorCalls==1);
+  const auto lostResult=sphereWire.take();
+  toSphere(probe,18);
+  assert(toRadar(sphereWire.take(),19)==SecureRxEvent::ProbeAck);
+  assert(radar.motorStatus()==SecureMotorStatus::Pending && radar.confirmations()==1);
+  radar.tick(462);
+  const auto retry=radarWire.take();
+  assert(retry==request);
+  toSphere(retry,463);
+  assert(motorCalls==1);
+  const auto result=sphereWire.take();
+  assert(result==lostResult);
+  auto falseResult=result;
+  falseResult.back()^=1;
+  toRadar(falseResult,464);
+  assert(radar.motorStatus()==SecureMotorStatus::Pending);
+  falseResult=result;
+  ++falseResult[12];  // Correct HMAC but wrong command identifier.
+  assert(sphereWire.sign(config.auth,falseResult.data(),48,falseResult.data()+48));
+  toRadar(falseResult,465);
+  assert(radar.motorStatus()==SecureMotorStatus::Pending);
+  assert(toRadar(result,466)==SecureRxEvent::None && radar.motorStatus()==SecureMotorStatus::Accepted);
+  assert(radar.confirmations()==1 && sphere.confirmations()==1);
+  toRadar(result,467);
+  assert(radar.motorStatus()==SecureMotorStatus::Accepted);
+
+  motorResponse=SecureMotorStatus::CoolingDown;
+  assert(radar.requestMotor(500));
+  radar.tick(500);
+  const auto next=radarWire.take();
+  toSphere(next,501);
+  toRadar(sphereWire.take(),502);
+  assert(motorCalls==2 && radar.motorStatus()==SecureMotorStatus::CoolingDown);
+  toSphere(request,503);
+  assert(sphereWire.queue.empty() && motorCalls==2);
+
+  sphere.setMotorHandler(nullptr);
+  assert(radar.requestMotor(600));
+  radar.tick(600);
+  toSphere(radarWire.take(),601);
+  toRadar(sphereWire.take(),602);
+  assert(radar.motorStatus()==SecureMotorStatus::Unavailable && motorCalls==2);
+
+  assert(radar.requestMotor(700));
+  radar.tick(700);
+  const auto unconfirmed=radarWire.take();
+  radar.tick(2050);
+  assert(radar.motorStatus()==SecureMotorStatus::Unconfirmed && radarWire.queue.empty());
+  toSphere(unconfirmed,2051);
+  toRadar(sphereWire.take(),2052);  // Late result cannot turn timeout into success.
+  assert(radar.motorStatus()==SecureMotorStatus::Unconfirmed);
+  assert(radar.requestMotor(2100));
+  radar.cancelMotorRequest();
+  radar.tick(2100);
+  assert(radar.motorStatus()==SecureMotorStatus::Unconfirmed && radarWire.queue.empty());
+
+  sphere.setMotorHandler(testMotorHandler);
+  handshake(16000);
+  toSphere(request,16005);
+  assert(motorCalls==2 && sphereWire.queue.empty() && sphere.diagnostics().stale_session==1);
+}
+
 int main() {
+  testMotorCommand();
   testRecords();
 #if M1C_BENCH_FIXTURE
   testBenchFixture();

@@ -9,7 +9,7 @@
 
 // Access to the queue is nonblocking. Only the loop sends; only its one TX
 // completion can release the in-flight slot. A timeout does not reuse the slot.
-struct DevTxPacket { uint8_t mac[6], bytes[SECURE_RADIO_SIZE], size; uint32_t queuedAt; };
+struct DevTxPacket { uint8_t mac[6], bytes[SECURE_RADIO_SIZE], size; uint32_t queuedAt; uint16_t ttlMs; };
 struct SecureTxDiagnostics {
   uint32_t enqueued=0, queueFull=0, expired=0, missingPeer=0;
   uint32_t submitted=0, apiRejected=0, delivered=0, deliveryFailed=0;
@@ -22,13 +22,14 @@ class DevRadioTx {
     if (!packets_) packets_=xQueueCreate(8,sizeof(DevTxPacket));
     return packets_!=nullptr;
   }
-  bool enqueue(const uint8_t *mac,const uint8_t *bytes,size_t size=RADIO_FRAME_SIZE) {
+  bool enqueue(const uint8_t *mac,const uint8_t *bytes,size_t size=RADIO_FRAME_SIZE,uint16_t ttlMs=1000) {
     if (!packets_ || !mac || !bytes || !size || size>SECURE_RADIO_SIZE) return false;
     DevTxPacket packet{};
     memcpy(packet.mac,mac,6);
     memcpy(packet.bytes,bytes,size);
     packet.size=size;
     packet.queuedAt=millis();
+    packet.ttlMs=ttlMs;
     const bool accepted=xQueueSend(packets_,&packet,0)==pdTRUE;
     if (size==SECURE_RADIO_SIZE) {
       if (accepted) ++secure_.enqueued;
@@ -68,7 +69,7 @@ class DevRadioTx {
     DevTxPacket p;
     if (xQueueReceive(packets_,&p,0)!=pdTRUE) return;
     const bool secure=p.size==SECURE_RADIO_SIZE;
-    if (uint32_t(millis()-p.queuedAt)>=1000) {
+    if (uint32_t(millis()-p.queuedAt)>=p.ttlMs) {
       if (secure) ++secure_.expired;
       return;
     }

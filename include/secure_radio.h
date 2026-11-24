@@ -15,6 +15,8 @@ constexpr char SECURE_RECORD_V2_KEY[] = "peer_v2";
 
 enum class SecureRecordVersion : uint8_t { None, V1, V2 };
 enum class SecureLinkStatus : uint8_t { Unavailable, AwaitingHandshake, Paired, Lost, ChannelMismatch };
+enum class SecureMotorStatus : uint8_t { Idle, Pending, Accepted, CoolingDown, Unavailable, Unconfirmed };
+using SecureMotorHandler = SecureMotorStatus (*)(uint32_t now);
 enum class SecureRxEvent : uint8_t { None, SessionStarted, ProbeAck };
 enum class SecureRecordRead { Missing, Loaded, Error };
 using SecureRecordReader = SecureRecordRead (*)(void *, const char *, uint8_t *, size_t &);
@@ -34,6 +36,7 @@ class SecureRadioIo {
   virtual bool sign(const uint8_t *key, const uint8_t *bytes, size_t length, uint8_t *tag) = 0;
   virtual void random(uint8_t *bytes, size_t length) = 0;
   virtual bool send(const uint8_t *mac, const uint8_t *bytes, size_t length) = 0;
+  virtual bool sendMotor(const uint8_t *mac, const uint8_t *bytes, size_t length) { return send(mac,bytes,length); }
 };
 bool secureRadioResolvePmk(SecureRadioConfig &config, SecureRadioIo &io);
 
@@ -59,7 +62,11 @@ class SecureRadio {
  public:
   SecureRadio(SecureRadioIo &io, bool controller, const SecureRadioConfig &config);
   void tick(uint32_t now);
-  SecureRxEvent receive(const uint8_t *source, const uint8_t *bytes, size_t length, uint32_t now);
+  SecureRxEvent receive(const uint8_t *source, const uint8_t *bytes, size_t length, uint32_t now, uint32_t queueAge=0);
+  bool requestMotor(uint32_t now);
+  void cancelMotorRequest();
+  SecureMotorStatus motorStatus() const { return motorStatus_; }
+  void setMotorHandler(SecureMotorHandler handler) { motorHandler_=handler; }
   LinkState state(uint32_t now) const { return peers_.state(1, now); }
   SecureLinkStatus linkStatus(uint32_t now, bool channelAligned) const;
   uint32_t confirmations() const { return confirmations_; }
@@ -69,7 +76,7 @@ class SecureRadio {
   const M1cRadioResult &benchResult() const { return benchResult_; }
 #endif
  private:
-  enum class Kind : uint8_t { Hello=1, Challenge, Finish, Ready, Probe, Ack };
+  enum class Kind : uint8_t { Hello=1, Challenge, Finish, Ready, Probe, Ack, Vibrate, VibrateResult };
   struct Nonces { uint8_t a[16], b[16]; };
   void emit(Kind kind, const Nonces &nonce, uint32_t seq=0, uint32_t ack=0);
   bool pack(uint8_t *bytes, Kind kind, const Nonces &nonce, uint32_t seq, uint32_t ack);
@@ -79,7 +86,11 @@ class SecureRadio {
   SecureRadioConfig config_;
   PairingRegistry peers_;
   ReplayWindow replay_;
-  RadioAckTracker ack_;
+  RadioAckTracker ack_, motorAck_;
+  ReplayWindow motorReplay_;
+  SecureMotorHandler motorHandler_=nullptr;
+  SecureMotorStatus motorStatus_=SecureMotorStatus::Idle, lastMotorResult_=SecureMotorStatus::Unavailable;
+  uint32_t motorSequence_=0, lastMotorRequest_=0, motorStarted_=0;
   SecureRadioDiagnostics diagnostics_;
   Nonces current_{}, pending_{};
   uint32_t started_=0, lastSend_=0, pendingAt_=0, nextProbe_=0, seq_=0, lastProbe_=0, confirmations_=0;

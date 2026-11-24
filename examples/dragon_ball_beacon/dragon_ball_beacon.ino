@@ -51,6 +51,16 @@ static SphereMotorRmt motorOutput;
 static SphereMotor<SphereMotorRmt> motor(motorOutput);
 static MotorTestCommand motorCommand;
 
+static SecureMotorStatus requestRemoteMotor(uint32_t now) {
+  switch (motor.request(now)) {
+    case MotorTestResult::Started: return SecureMotorStatus::Accepted;
+    case MotorTestResult::Busy:
+    case MotorTestResult::CoolingDown: return SecureMotorStatus::CoolingDown;
+    case MotorTestResult::Disabled: return SecureMotorStatus::Unavailable;
+  }
+  return SecureMotorStatus::Unavailable;
+}
+
 static void pollMotorConsole() {
   if (!Serial) {
     motorCommand.reset();
@@ -132,8 +142,10 @@ void setup() {
     const bool secureReady = secure.begin(false);
 #if SPHERE_MOTOR_USB_TEST
     if (motorLow && secureReady && motor.begin() &&
-        motor.request(millis(), kMotorStartupPulseMs) == MotorTestResult::Started)
-      Serial.println("MOTOR_TEST READY (USB only), startup pulse 60 ms");
+        motor.request(millis(), kMotorStartupPulseMs) == MotorTestResult::Started) {
+      secure.setMotorHandler(requestRemoteMotor);
+      Serial.println("MOTOR_TEST READY (USB), startup pulse 60 ms");
+    }
 #else
     (void)secureReady;
 #endif

@@ -3,6 +3,12 @@
 
 namespace {
 constexpr uint32_t handshakeMs=5000, retryMs=450, intervalMs=3000;
+constexpr uint32_t motorWindowMs=3*retryMs, motorQueueMaxMs=1000;
+constexpr uint32_t maxSequence=0x7ffffffe;
+bool motorResult(uint32_t result) {
+  return result==uint8_t(SecureMotorStatus::Accepted) || result==uint8_t(SecureMotorStatus::CoolingDown) ||
+         result==uint8_t(SecureMotorStatus::Unavailable);
+}
 // The full nonce pair gates every message before these legacy trackers are
 // called. The handle is local to the current handshake and never on the wire.
 constexpr uint32_t handle=1;
@@ -96,6 +102,10 @@ void SecureRadio::emit(Kind kind,const Nonces &nonce,uint32_t seq,uint32_t ack) 
 void SecureRadio::established(uint32_t now) {
   replay_.reset();
   replay_.beginAuthenticatedSession(handle,true);
+  motorReplay_.reset();
+  motorReplay_.beginAuthenticatedSession(handle,true);
+  cancelMotorRequest();
+  motorSequence_=lastMotorRequest_=0;
   peers_.beginAuthenticatedSession(1,config_.peer,handle,now,true);
   online_=true;
   attempting_=false;
@@ -154,10 +164,33 @@ SecureLinkStatus SecureRadio::linkStatus(uint32_t now, bool channelAligned) cons
   }
 }
 
+bool SecureRadio::requestMotor(uint32_t now) {
+  if (!controller_ || linkStatus(now,true)!=SecureLinkStatus::Paired ||
+      motorStatus_==SecureMotorStatus::Pending || motorSequence_==maxSequence) return false;
+  uint8_t frame[SECURE_RADIO_SIZE];
+  const uint32_t sequence=++motorSequence_;
+  if (!pack(frame,Kind::Vibrate,current_,sequence,0) ||
+      !motorAck_.begin(1,config_.peer,handle,sequence,frame,sizeof(frame),now)) {
+    motorStatus_=SecureMotorStatus::Unconfirmed;
+    return false;
+  }
+  motorStarted_=now;
+  motorStatus_=SecureMotorStatus::Pending;
+  return true;
+}
+
+void SecureRadio::cancelMotorRequest() {
+  if (motorStatus_==SecureMotorStatus::Pending) {
+    motorAck_=RadioAckTracker{};
+    motorStatus_=SecureMotorStatus::Unconfirmed;
+  }
+}
+
 void SecureRadio::tick(uint32_t now) {
   if (!controller_) return;
   if (online_ && peers_.state(1,now)!=LinkState::Paired) online_=false;
   if (!online_) {
+    cancelMotorRequest();
     if (!attempting_ || now-started_>=handshakeMs) {
       current_=Nonces{};
       io_.random(current_.a,sizeof(current_.a));
@@ -173,8 +206,12 @@ void SecureRadio::tick(uint32_t now) {
     return;
   }
   uint8_t frame[SECURE_RADIO_SIZE], length=0;
+  if (motorStatus_==SecureMotorStatus::Pending) {
+    if (now-motorStarted_>=motorWindowMs) cancelMotorRequest();
+    else if (motorAck_.due(now,frame,length)) io_.sendMotor(config_.peer,frame,length);
+  }
   if (!ack_.pending() && int32_t(now-nextProbe_)>=0) {
-    if (seq_==0x7ffffffe) { online_=false; return; } // Renew before signed replay window wraps.
+    if (seq_==maxSequence) { online_=false; cancelMotorRequest(); return; } // Renew before signed replay window wraps.
     ++seq_;
     if (pack(frame,Kind::Probe,current_,seq_,0))
       ack_.begin(1,config_.peer,handle,seq_,frame,sizeof(frame),now);
@@ -190,7 +227,7 @@ void SecureRadio::tick(uint32_t now) {
     ++diagnostics_.probe_retry_queued;
   }
 }
-SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint32_t now) {
+SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint32_t now,uint32_t queueAge) {
   if (!source || !b || len!=SECURE_RADIO_SIZE || !equal(source,config_.peer,6) ||
       std::memcmp(b,"DRA1",4) || b[5]!=(controller_?1:0) || b[6]!=(controller_?0:1) || b[7]) return SecureRxEvent::None;
   const Kind kind=Kind(b[4]);
@@ -198,7 +235,26 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
   Nonces nonce{};
   std::memcpy(nonce.a,b+16,16); std::memcpy(nonce.b,b+32,16);
   if (!nonzero(nonce.a,16) || (nonzero(nonce.b,16)==(kind==Kind::Hello))) return SecureRxEvent::None;
-  if (kind==Kind::Probe ? (!seq || ack) : kind==Kind::Ack ? (seq || !ack) : (seq || ack)) return SecureRxEvent::None;
+  switch (kind) {
+    case Kind::Probe:
+    case Kind::Vibrate:
+      if (!seq || ack || (kind==Kind::Vibrate && (seq>maxSequence || queueAge>=motorQueueMaxMs)))
+        return SecureRxEvent::None;
+      break;
+    case Kind::Ack:
+      if (seq || !ack) return SecureRxEvent::None;
+      break;
+    case Kind::VibrateResult:
+      if (!motorResult(seq) || !ack) return SecureRxEvent::None;
+      break;
+    case Kind::Hello:
+    case Kind::Challenge:
+    case Kind::Finish:
+    case Kind::Ready:
+      if (seq || ack) return SecureRxEvent::None;
+      break;
+    default: return SecureRxEvent::None;
+  }
   uint8_t tag[32];
   if (!io_.sign(config_.auth,b,48,tag)) return SecureRxEvent::None;
   if (!equal(tag,b+48,sizeof(tag))) {
@@ -206,7 +262,8 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
     return SecureRxEvent::None;
   }
   const bool current=equal(nonce.a,current_.a,16) && equal(nonce.b,current_.b,16);
-  if (!current && online_ && (controller_ ? kind==Kind::Ack : kind==Kind::Probe)) {
+  if (!current && online_ && (controller_ ? (kind==Kind::Ack || kind==Kind::VibrateResult) :
+                                         (kind==Kind::Probe || kind==Kind::Vibrate))) {
     ++diagnostics_.stale_session;
     return SecureRxEvent::None;
   }
@@ -222,9 +279,10 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
     } else if (kind==Kind::Ready && freshAttempt && challenged_ && current) {
       established(now);
       return SecureRxEvent::SessionStarted;
-    } else if (kind==Kind::Ack && online_ && current && peers_.state(1,now)==LinkState::Paired) {
+    } else if ((kind==Kind::Ack || kind==Kind::VibrateResult) && online_ && current &&
+               peers_.state(1,now)==LinkState::Paired) {
 #if M1C_BENCH_FIXTURE
-      if (benchAction_==M1cRadioAction::DropAck && ack_.pending() && ack==seq_) {
+      if (kind==Kind::Ack && benchAction_==M1cRadioAction::DropAck && ack_.pending() && ack==seq_) {
         ++benchResult_.ack_dropped;
         benchAction_=M1cRadioAction::None;
         return SecureRxEvent::None;
@@ -233,7 +291,10 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       RadioFrame result{};
       result.type=RadioMessage::CommandAck; result.id=1; result.destination=0;
       result.session=handle; result.ack_sequence=ack;
-      if (ack_.acknowledge(source,result,true)) {
+      if (kind==Kind::VibrateResult) {
+        if (now-motorStarted_>=motorWindowMs) cancelMotorRequest();
+        else if (motorAck_.acknowledge(source,result,true)) motorStatus_=SecureMotorStatus(seq);
+      } else if (ack_.acknowledge(source,result,true)) {
         peers_.markAuthenticatedRx(1,source,handle,now,true);
         ++confirmations_;
         return SecureRxEvent::ProbeAck;
@@ -260,6 +321,13 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       established(now);
       emit(Kind::Ready,current_);
     }
+  } else if (kind==Kind::Vibrate && online_ && current && peers_.state(1,now)==LinkState::Paired) {
+    if (motorReplay_.accept(handle,seq)) {
+      lastMotorRequest_=seq;
+      lastMotorResult_=motorHandler_ ? motorHandler_(now) : SecureMotorStatus::Unavailable;
+      if (!motorResult(uint8_t(lastMotorResult_))) lastMotorResult_=SecureMotorStatus::Unavailable;
+    }
+    if (seq==lastMotorRequest_) emit(Kind::VibrateResult,current_,uint8_t(lastMotorResult_),seq);
   } else if (kind==Kind::Probe && online_ && current && peers_.state(1,now)==LinkState::Paired) {
     if (replay_.accept(handle,seq)) {
       lastProbe_=seq;
