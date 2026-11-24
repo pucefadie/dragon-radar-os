@@ -99,9 +99,17 @@ ProximitySnapshot ProximityEngine::snapshot(uint32_t now) const {
 }
 
 bool ProximityEngine::confirmFound(uint32_t now) {
-  if (!snapshot(now).fresh) return false;
+  if (found_ || !snapshot(now).fresh) return false;
   found_ = true;
   return true;
+}
+
+SearchEvent ProximityEngine::confirmOrRestartSearch(uint32_t now, bool paired) {
+  if (found_) {
+    reset();
+    return SearchEvent::None;
+  }
+  return paired && confirmFound(now) ? SearchEvent::SphereFound : SearchEvent::None;
 }
 
 void ProximityEngine::reset() {

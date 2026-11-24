@@ -42,6 +42,7 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Verificare sul banco IMR14500 500 mAh + protezione PCM 1S, carica, connessioni, massimi di corrente e tensione; non assumere protezioni integrate.
 - **M3a PASS funzionale via USB** impulso di avvio, comando seriale, cooldown e stabilità DRA1 sotto carico verificati. Durate elettriche, transitori di reset e tenuta della 3V3 restano da misurare. Tre WS2812B predisposti su D5 e disabilitati.
 - **M3b PASS funzionale via USB** comando manuale DRA1 da Debug. Test host, build S3/C6, installazione, 60 s DRA1 e prova supervisionata del Grove passati. Due impulsi ai tocchi accettati e nessun impulso durante il cooldown. Restano aperte le misure strumentali M3a.
+- **M3c** feedback DRA1 sulla conferma manuale del ritrovamento e evento software per future animazioni RGB. Test host e build S3 completati. Collaudo fisico S3 con C6 M3b ancora da eseguire.
 - Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 

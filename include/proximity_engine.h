@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 enum class ProximityState : uint8_t { Searching, Weak, Stable, Approaching, MovingAway, Near, Found, Lost };
+enum class SearchEvent : uint8_t { None, SphereFound };
 enum class SignalQuality : uint8_t { Unavailable, Weak, Fair, Strong };
 
 constexpr uint8_t kProximityMaxLevel = 15;
@@ -30,6 +31,7 @@ class ProximityEngine {
   void sample(int8_t rssi, uint32_t received, uint32_t now);
   ProximitySnapshot snapshot(uint32_t now) const;
   bool confirmFound(uint32_t now);
+  SearchEvent confirmOrRestartSearch(uint32_t now, bool paired);
   void invalidate() { valid_ = false; }
   void reset();
   void setSuspended(bool suspended, uint32_t now);

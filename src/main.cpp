@@ -935,8 +935,10 @@ void loop() {
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap) {
     if (settingsGet().demo) appRadarApproach();
     else if (gesture.x >= RADAR_FOUND_X && gesture.x < RADAR_FOUND_X + RADAR_FOUND_WIDTH &&
-             gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT)
-      beaconServiceConfirmOrRestartSearch();
+             gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT) {
+      const auto event = beaconServiceConfirmOrRestartSearch();
+      if (event == SearchEvent::SphereFound) beaconServiceRequestSphereMotor();
+    }
   }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Audiobookshelf && gesture.type == Gesture::Tap) {
     if (gesture.y >= 245 && gesture.y < 315) { if (gesture.x < 233) { if (audiobookshelfIsAuthenticated()) audiobookshelfLoadCatalog(); else audiobookshelfCheckServer(); } else audioServiceTestTone(); }

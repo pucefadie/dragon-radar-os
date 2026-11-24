@@ -31,9 +31,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | C6 standard no_ota | 970880 | `89ec01d90823313771fe393489384f512bd295670d7f7f1630a5563e19f9b61f` |
 | C6 provisioning no_ota | 263008 | `705a737d66416b8fff38a276d79981177f50ea5f208485db3603b931044b7d64` |
 
-## Stato del collaudo M3b
+## Prossime azioni M3c
 
-Il collaudo funzionale USB è completato. Restano aperte le misure M3a di durata degli impulsi, transitori D4 al reset e in ROM e tenuta della 3V3.
+1. Dopo autorizzazione, acquisire backup corrente del radar e verificare la selezione OTA1.
+2. Installare e verificare in rilettura la sola app S3 M3c, usando il C6 M3b già collaudato.
+3. Confermare una sfera da Radar → Reale e verificare un solo impulso. Ripetere la prova durante il cooldown per confermare che il ritrovamento resti valido anche senza vibrazione. Verificare anche il comando manuale in Debug.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -345,3 +347,13 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS radio durante il comando** Paired sul canale 6 in tutta la finestra, almeno 10 s di monitoraggio dopo l'ultima conferma. Conferme S3 141 → 149 e C6 187 → 194. Nessun nuovo drop RX, errore di consegna, rifiuto di autenticazione, retry dei probe, duplicato o stallo TX. Nessun reset osservato.
 - **PASS fisico riferito dall'operatore** primo e terzo tocco hanno prodotto un impulso ciascuno. Al secondo tocco il motore è rimasto fermo e il display ha mostrato l'invito a riprovare. Le due accettazioni sono verificate via seriale. Il testo positivo sul pannello non è stato confermato esplicitamente dall'operatore.
 - **M3b PASS funzionale via USB** deduplicazione del comando con risposta persa verificata nei test host. Le misure strumentali M3a restano aperte. Log privati.
+
+
+## M3c — feedback di gioco al ritrovamento
+
+- **M3b PASS funzionale via USB.** Conservati i binari installati. Le misure strumentali M3a restano aperte.
+- In **Radar → Reale**, un tocco sul pulsante di conferma con una misura attendibile e DRA1 Paired registra lo stato Trovata e produce una sola volta l'evento software `SphereFound` per quella ricerca. Il radar usa lo stesso comando autenticato di Debug per tentare l'impulso da 120 ms. Se la richiesta non parte o il C6 non la conferma, lo stato Trovata resta valido. `Nuova ricerca` azzera lo stato e attende una nuova misura.
+- L'evento è riutilizzabile per le future animazioni RGB. Il gioco conserva il ritrovamento manuale e i LED esterni disabilitati. Driver, cooldown, formato DRA1, RSSI e pairing seguono i percorsi già collaudati. Il C6 resta quello M3b.
+- **PASS host** 10 esecuzioni, comprese ASan/UBSan per prossimità e DRA1. Testate conferma con Paired e misura fresca, assenza della misura, misura scaduta, link indisponibile, conferma ripetuta, permanenza del ritrovamento dopo invalidazione e avvio di una nuova ricerca. Conservati i test M3b per retry e deduplicazione.
+- **PASS build S3 UI Trial** Arduino ESP32 3.3.12. Target, checksum, hash interno, tabelle partizioni e confronto dei sorgenti di staging verificati. Candidato da 1.777.680 byte, SHA-256 `e6873cd926fd0e87b52bbb6b27e2ae6490747b86607d87794bbabcea28609f5e`, sola app OTA1 a `0x310000`, settori fino a `0x4c2fff`. Baseline S3 e C6 M3b riverificate per SHA-256. Artefatti e log fuori da Git.
+- **NOT RUN collaudo fisico M3c.** Nessun flash.

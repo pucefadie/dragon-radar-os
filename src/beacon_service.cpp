@@ -165,12 +165,12 @@ void beaconServiceSetProximitySuspended(bool suspended) {
   (void)suspended;
 #endif
 }
-void beaconServiceConfirmOrRestartSearch() {
+SearchEvent beaconServiceConfirmOrRestartSearch() {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   const uint32_t now=millis();
-  if (proximity.snapshot(now).state==ProximityState::Found) proximity.reset();
-  else if (beaconServiceSecureLinkStatus()==SecureLinkStatus::Paired)
-    proximity.confirmFound(now);
+  return proximity.confirmOrRestartSearch(now, secureReady && secure.linkStatus(now)==SecureLinkStatus::Paired);
+#else
+  return SearchEvent::None;
 #endif
 }
 void beaconServiceRequestSphereMotor() {

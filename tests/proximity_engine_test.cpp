@@ -110,6 +110,24 @@ int main() {
   assert(closeSignal.snapshot(t).level == 0);
   assert(hold(-65).level == 4);  // New session starts at its own measured level.
 
+  ProximityEngine search;
+  assert(search.confirmOrRestartSearch(0,true) == SearchEvent::None);
+  search.sample(-19,10,10);
+  assert(search.snapshot(10).state == State::Near);
+  assert(search.confirmOrRestartSearch(10,false) == SearchEvent::None);
+  assert(search.confirmOrRestartSearch(10010,true) == SearchEvent::None);
+  search.sample(-19,10011,10011);
+  assert(search.confirmOrRestartSearch(10012,true) == SearchEvent::SphereFound);
+  assert(!search.confirmFound(10013));  // No second event from an already confirmed search.
+  // No motor request or ACK is needed to keep the completed search.
+  search.invalidate();
+  assert(search.snapshot(20013).state == State::Found);
+  assert(search.confirmOrRestartSearch(20014,false) == SearchEvent::None); // Nuova ricerca.
+  assert(search.snapshot(20014).state == State::Searching);
+  assert(search.confirmOrRestartSearch(20015,true) == SearchEvent::None);
+  search.sample(-42,20016,20016);
+  assert(search.confirmOrRestartSearch(20017,true) == SearchEvent::SphereFound);
+
   ProximityEngine wrap;
   wrap.sample(-74, UINT32_MAX - 1000, UINT32_MAX - 1000);
   assert(wrap.snapshot(999).age_ms == 2000 && wrap.snapshot(999).fresh);
