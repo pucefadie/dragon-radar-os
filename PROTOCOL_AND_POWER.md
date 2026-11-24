@@ -2,7 +2,7 @@
 
 DRB2 mantiene il frame broadcast da 34 byte, little-endian e CRC16. Nei frame diretti, il flag DIRECTED riusa il byte reserved come payload length e il precedente payload-length byte come destinazione; i beacon broadcast restano compatibili. ID radar 0, sfere 1–7, broadcast 255. Il codec verifica tipo, ID, flags, dimensione e CRC.
 
-Il collegamento standard M1b supporta una sfera prototipo, ID 1. I beacon DRB2 restano pubblici e non autenticati. Il traffico diagnostico sicuro usa un formato separato DRA1 da 80 byte. Contiene ruolo e ID di origine/destinazione, due nonce da 128 bit, sequenza o riferimento ACK e HMAC-SHA-256. ESP-NOW usa un peer unicast con LMK e PMK configurate; l'app verifica anche HMAC, indirizzi e sessione. I nonce sono generati quando il Wi-Fi è attivo. Non si ricava l'autenticazione dal CRC, dal MAC sorgente o da un flag dichiarato dal peer.
+Il collegamento M1b usa una sfera prototipo, ID 1. M3 multisfera estende il supporto fino a sette sfere. I beacon DRB2 restano pubblici e non autenticati. Il traffico diagnostico sicuro usa un formato separato DRA1 da 80 byte. Contiene ruolo e ID di origine/destinazione, due nonce da 128 bit, sequenza o riferimento ACK e HMAC-SHA-256. ESP-NOW usa un peer unicast con LMK e PMK configurate; l'app verifica anche HMAC, indirizzi e sessione. I nonce sono generati quando il Wi-Fi è attivo. Non si ricava l'autenticazione dal CRC, dal MAC sorgente o da un flag dichiarato dal peer.
 
 Il radar sfida la sfera e verifica la risposta che lega entrambe le sfide alla chiave. La sfera accetta FINISH solo per una sfida fresca. Il radar apre la sessione dopo READY. I probe di stato hanno sequenza crescente e ACK correlato; il duplicato dell'ultima richiesta può riottenere l'ACK senza aggiornare la validità della sessione. Un riavvio richiede un nuovo handshake. La modalità DEV rimane esclusa dalla build standard e non condivide la macchina di autenticazione. Da M3b il profilo autenticato supporta anche il comando di vibrazione descritto qui sotto.
 
@@ -27,7 +27,7 @@ Espressif espone una PMK per istanza ESP-NOW e una LMK per peer. L'API descrive 
 | DRC1 preesistente | `peer_v1` | Primi 16 byte di HMAC-SHA-256 della chiave applicativa sul contesto fisso M1c. La derivazione avviene in RAM ed è compatibile con le immagini del banco riuscito. |
 | DRC2 nuovo | `peer_v2` | 16 byte casuali condivisi nel dominio radar–sfere e distribuiti via cavo. |
 
-Entrambi i record sono di 76 byte. L'ordine è magic da 4 byte, ID, canale, MAC STA del peer da 6 byte, LMK da 16 byte, chiave HMAC da 32 byte, campo PMK da 16 byte. DRC2 mantiene LMK e HMAC distinte per la coppia. Il generatore usa tre estrazioni casuali separate e assegna la stessa PMK ai due record. Non c'è una PMK compilata nel firmware. La PMK è per dominio perché `esp_now_set_pmk()` non accetta un peer. L'estensione a sette sfere richiederà una PMK installata una volta sul radar e una tabella per ID con MAC, LMK e HMAC di ogni coppia. La PMK condivisa va trattata come materiale del dominio. La compromissione di una sfera richiede una politica di revoca e rotazione, senza riuso delle chiavi della coppia revocata. Il limite configurato nel core è sette peer cifrati; questa build ammette ancora solo ID 1.
+Entrambi i record sono di 76 byte. L'ordine è magic da 4 byte, ID, canale, MAC STA del peer da 6 byte, LMK da 16 byte, chiave HMAC da 32 byte, campo PMK da 16 byte. DRC2 mantiene LMK e HMAC distinte per la coppia. Il generatore usa tre estrazioni casuali separate e assegna la stessa PMK ai due record. Non c'è una PMK compilata nel firmware. La PMK è per dominio perché `esp_now_set_pmk()` non accetta un peer. M3 multisfera usa una PMK installata una volta sul radar e una configurazione per ID con MAC, LMK e HMAC di ogni coppia. La PMK condivisa va trattata come materiale del dominio. La compromissione di una sfera richiede una politica di revoca e rotazione, senza riuso delle chiavi della coppia revocata. Il limite configurato nel core del radar è sette peer cifrati.
 
 Il loader apre NVS in sola lettura. Se `peer_v2` esiste, verifica tipo, lunghezza, magic, ID, canale, peer e chiavi. Un DRC2 presente ma invalido blocca DRA1. Il solo caso che consente di leggere DRC1 è l'assenza di `peer_v2`. Errori di derivazione o di installazione nel driver impediscono l'avvio del link. I buffer di caricamento e derivazione vengono azzerati. Serial riporta la versione del record e gli esiti numerici delle API, senza stampare chiavi o MAC. L'opzione sperimentale M1c è rimossa. DRA1 e la finestra anti-replay conservano lo stesso formato e gli stessi controlli.
 
@@ -36,3 +36,21 @@ Il loader apre NVS in sola lettura. Se `peer_v2` esiste, verifica tipo, lunghezz
 Il ripristino delle immagini M1c riporta la coppia al percorso DRC1 senza modificare NVS, se i due record precedenti sono ancora presenti. Riavviare M1d riattiva la precedenza di DRC2. Il ritorno di M1d a DRC1 dopo aver salvato DRC2 richiede un'operazione di manutenzione distinta. La sostituzione di un DRC2 già presente richiederà uno strumento di rotazione che verifichi il record atteso e predisponga l'attivazione su entrambi i dispositivi. Non fa parte di questa utility. Con flash/NVS in chiaro la lettura fisica può esporre le chiavi. Vedere [SECURITY_PLAN.md](SECURITY_PLAN.md) per la protezione a riposo.
 
 L'antenna esterna XIAO viene selezionata prima di avviare la radio: GPIO3 LOW, GPIO14 HIGH. Collegare l'antenna U.FL. Attuatori, ADC batteria, shake sensor e deep sleep non sono implementati; non pilotare carichi direttamente dai GPIO. Non è stata misurata autonomia.
+
+
+## M3 multisfera — aggiungere un'associazione via USB
+
+Ogni sfera ha un ID univoco da 1 a 7. Il radar conserva sette sessioni DRA1 con nonce, replay, comandi e misure indipendenti. Sorgente e destinazione includono l'ID secondo il formato DRA1 esistente. ID 1 mantiene i record DRC1 e DRC2 e lo stesso formato radio. Il C6 M3b è stato collaudato fisicamente con DRC1. Il radar considera per prime le credenziali della sfera 1, se presenti e valide. Il primo peer accettato determina canale e PMK. Record successivi con canale o PMK diversi o MAC già registrato non vengono attivati.
+
+Per ogni nuova sfera, conservare fuori da Git una copia privata del record radar di ID 1 già installato. Per un dominio DRC1 il generatore ricava in locale la stessa PMK di M3b. Per DRC2 riprende la PMK del record. Per ogni coppia genera LMK e HMAC nuove.
+
+1. Assegnare un ID libero. Preparare i due record. Il generatore richiede i MAC STA del radar e della nuova sfera. L'esempio aggiunge ID 2 al dominio sul canale 6.
+
+   ```sh
+   python3 scripts/make_radio_records.py "$HOME/privato/dragon-radar/sfera-2"       --id 2 --channel 6 --domain-record "$HOME/privato/dragon-radar/sfera-1/radar.bin"
+   scripts/build_m1c_c6.sh radio build/c6-radio-id2 2
+   ```
+
+2. Dopo autorizzazione hardware e backup, caricare l'utility di provisioning USB in uno slot autorizzato. Per S3 usare `M1C_BENCH_PROVISION=1 scripts/build_m1c_bench.sh build/s3-provision`. Per C6 usare `scripts/build_m1c_c6.sh provision build/c6-provision`. Tenere batteria e Grove scollegati durante programmazione, ROM e provisioning.
+3. A utility in esecuzione, inviare via USB un byte ASCII `P` seguito dai 76 byte di `radar.bin` al radar e di `sphere.bin` alla nuova sfera. Attendere `RADIO_PROVISION_OK` prima di inviare un altro record. I record aggiuntivi finiscono nelle chiavi `peer_v2_2`–`peer_v2_7`. L'utility rifiuta di sovrascrivere un valore esistente. Per estendere il dominio non inviare alcun nuovo record per ID 1.
+4. Con autorizzazione di scrittura, avviare l'app S3 multisfera e installare l'app radio del nuovo C6 compilata per lo stesso ID. Il C6 ID 1 conserva M3b. In **Radar → Reale** verificare selezione, Paired e misura fresca, poi ripetere per un altro ID. Accendere progressivamente le altre sfere per il collaudo concorrente.

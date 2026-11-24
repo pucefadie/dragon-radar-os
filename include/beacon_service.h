@@ -8,9 +8,15 @@ void beaconServicePrint(Stream &out);
 uint8_t beaconServiceFreshCount();
 uint8_t beaconServiceChannel();
 SecureLinkStatus beaconServiceSecureLinkStatus();
+struct SphereGameView {
+  uint8_t selected=0, associated=0, found=0, foundCount=0;
+};
+SphereGameView beaconServiceSphereGame();
+bool beaconServiceSelectSphere(uint8_t id);
+void beaconServiceNewGame();
 ProximitySnapshot beaconServiceProximity();
 void beaconServiceSetProximitySuspended(bool suspended);
-SearchEvent beaconServiceConfirmOrRestartSearch();
+SearchEvent beaconServiceConfirmSphereFound();
 void beaconServiceRequestSphereMotor();
 SecureMotorStatus beaconServiceSphereMotorStatus();
 #if M1C_BENCH_FIXTURE

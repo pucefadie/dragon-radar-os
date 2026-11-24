@@ -110,23 +110,36 @@ int main() {
   assert(closeSignal.snapshot(t).level == 0);
   assert(hold(-65).level == 4);  // New session starts at its own measured level.
 
-  ProximityEngine search;
-  assert(search.confirmOrRestartSearch(0,true) == SearchEvent::None);
-  search.sample(-19,10,10);
-  assert(search.snapshot(10).state == State::Near);
-  assert(search.confirmOrRestartSearch(10,false) == SearchEvent::None);
-  assert(search.confirmOrRestartSearch(10010,true) == SearchEvent::None);
-  search.sample(-19,10011,10011);
-  assert(search.confirmOrRestartSearch(10012,true) == SearchEvent::SphereFound);
-  assert(!search.confirmFound(10013));  // No second event from an already confirmed search.
-  // No motor request or ACK is needed to keep the completed search.
-  search.invalidate();
-  assert(search.snapshot(20013).state == State::Found);
-  assert(search.confirmOrRestartSearch(20014,false) == SearchEvent::None); // Nuova ricerca.
-  assert(search.snapshot(20014).state == State::Searching);
-  assert(search.confirmOrRestartSearch(20015,true) == SearchEvent::None);
-  search.sample(-42,20016,20016);
-  assert(search.confirmOrRestartSearch(20017,true) == SearchEvent::SphereFound);
+  SphereSearch search;
+  search.setAssociated(0x7f);
+  assert(search.selected()==1 && search.foundCount()==0);
+  assert(search.confirm(0,true)==SearchEvent::None);
+  for (uint8_t id=1; id<=SphereSearch::count; ++id) search.sample(id,int8_t(-20-id),10+id,17);
+  assert(search.snapshot(1,17).raw==-21 && search.snapshot(7,17).raw==-27);
+  assert(search.snapshot(1,17).age_ms==6 && search.snapshot(7,17).age_ms==0);
+  assert(search.confirm(17,false)==SearchEvent::None);
+  search.invalidate(2);
+  assert(!search.snapshot(2,17).fresh && search.snapshot(1,17).fresh);
+  assert(search.confirm(17,true)==SearchEvent::SphereFound);
+  assert(search.confirm(18,true)==SearchEvent::None && !search.select(1));
+  assert(search.select(2) && search.confirm(18,true)==SearchEvent::None);
+  search.sample(2,-22,19,19);
+  assert(search.confirm(10019,true)==SearchEvent::None);
+  search.sample(2,-22,10020,10020);
+  assert(search.confirm(10020,true)==SearchEvent::SphereFound);
+  search.setSuspended(true,10021);
+  assert(search.snapshot(1,10021).state==State::Found && search.foundCount()==2);
+  search.setSuspended(false,10030);
+  for (uint8_t id=3; id<=SphereSearch::count; ++id) {
+    assert(search.select(id));
+    assert(search.confirm(10031,true)==SearchEvent::None);
+    search.sample(id,-45,10032,10032);
+    assert(search.confirm(10033,true)==SearchEvent::SphereFound);
+  }
+  assert(search.foundCount()==7 && !search.select(7));
+  search.newGame();
+  assert(search.foundCount()==0 && search.associated()==0x7f && search.select(1));
+  assert(!search.snapshot(1,10034).fresh && search.confirm(10034,true)==SearchEvent::None);
 
   ProximityEngine wrap;
   wrap.sample(-74, UINT32_MAX - 1000, UINT32_MAX - 1000);

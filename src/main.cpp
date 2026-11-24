@@ -934,10 +934,18 @@ void loop() {
   GestureEvent gesture = g_gestures.update(g_touch_pressed, g_touch_x, g_touch_y, millis());
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap) {
     if (settingsGet().demo) appRadarApproach();
-    else if (gesture.x >= RADAR_FOUND_X && gesture.x < RADAR_FOUND_X + RADAR_FOUND_WIDTH &&
-             gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT) {
-      const auto event = beaconServiceConfirmOrRestartSearch();
-      if (event == SearchEvent::SphereFound) beaconServiceRequestSphereMotor();
+    else if (gesture.y >= RADAR_SPHERE_Y && gesture.y < RADAR_SPHERE_Y + RADAR_SPHERE_HEIGHT &&
+             gesture.x >= RADAR_SPHERE_X && gesture.x < RADAR_SPHERE_X + SphereSearch::count*RADAR_SPHERE_PITCH) {
+      const int16_t offset=gesture.x-RADAR_SPHERE_X;
+      if (offset%RADAR_SPHERE_PITCH<RADAR_SPHERE_WIDTH)
+        beaconServiceSelectSphere(1+offset/RADAR_SPHERE_PITCH);
+    } else if (gesture.x >= RADAR_GAME_X && gesture.x < RADAR_GAME_X + RADAR_GAME_WIDTH &&
+               gesture.y >= RADAR_GAME_Y && gesture.y < RADAR_GAME_Y + RADAR_GAME_HEIGHT &&
+               beaconServiceSphereGame().foundCount) {
+      beaconServiceNewGame();
+    } else if (gesture.x >= RADAR_FOUND_X && gesture.x < RADAR_FOUND_X + RADAR_FOUND_WIDTH &&
+               gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT) {
+      if (beaconServiceConfirmSphereFound() == SearchEvent::SphereFound) beaconServiceRequestSphereMotor();
     }
   }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Audiobookshelf && gesture.type == Gesture::Tap) {

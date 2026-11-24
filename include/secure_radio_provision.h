@@ -5,9 +5,7 @@
 
 // Used only by the separate USB provisioning images.
 inline void secureRadioProvisionPoll(Stream &console) {
-  static bool used=false;
-  if (used || console.available()<=0 || console.read()!='P') return;
-  used=true;
+  if (console.available()<=0 || console.read()!='P') return;
   uint8_t record[SECURE_CONFIG_SIZE]{};
   SecureRadioConfig config{};
   console.setTimeout(3000);
@@ -19,8 +17,9 @@ inline void secureRadioProvisionPoll(Stream &console) {
     ok=nvs_open(SECURE_RECORD_NAMESPACE,NVS_READWRITE,&storage)==ESP_OK;
     if (ok) {
       // Existing values, including an invalid type, are never replaced.
-      ok=nvs_find_key(storage,SECURE_RECORD_V2_KEY,nullptr)==ESP_ERR_NVS_NOT_FOUND &&
-        nvs_set_blob(storage,SECURE_RECORD_V2_KEY,record,sizeof(record))==ESP_OK &&
+      const char *key=secureRadioRecordKey(config.id);
+      ok=key && nvs_find_key(storage,key,nullptr)==ESP_ERR_NVS_NOT_FOUND &&
+        nvs_set_blob(storage,key,record,sizeof(record))==ESP_OK &&
         nvs_commit(storage)==ESP_OK;
       nvs_close(storage);
     }

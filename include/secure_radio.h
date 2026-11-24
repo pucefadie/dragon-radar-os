@@ -7,6 +7,7 @@
 #error "The DRA1 fixture requires the isolated, authenticated M1c radio build."
 #endif
 
+constexpr uint8_t SECURE_SPHERE_COUNT = 7;
 constexpr size_t SECURE_RADIO_SIZE = 80;
 constexpr size_t SECURE_CONFIG_SIZE = 76;
 constexpr char SECURE_RECORD_NAMESPACE[] = "dragon_radio";
@@ -21,13 +22,15 @@ enum class SecureRxEvent : uint8_t { None, SessionStarted, ProbeAck };
 enum class SecureRecordRead { Missing, Loaded, Error };
 using SecureRecordReader = SecureRecordRead (*)(void *, const char *, uint8_t *, size_t &);
 
-// One deliberately provisioned sphere (ID 1). Keys have separate purposes.
+// One deliberately provisioned sphere. Keys have separate purposes.
 struct SecureRadioConfig {
   uint8_t channel, peer[6], lmk[16], auth[32], pmk[16];
   SecureRecordVersion version;
+  uint8_t id = 1;
 };
 bool secureRadioDecodeConfig(const uint8_t *bytes, size_t length, SecureRadioConfig &out);
-bool secureRadioLoadConfig(SecureRecordReader read, void *storage, SecureRadioConfig &out);
+const char *secureRadioRecordKey(uint8_t id);
+bool secureRadioLoadConfig(SecureRecordReader read, void *storage, SecureRadioConfig &out, uint8_t id=1);
 void secureRadioClear(void *bytes, size_t length);
 
 class SecureRadioIo {
@@ -67,7 +70,7 @@ class SecureRadio {
   void cancelMotorRequest();
   SecureMotorStatus motorStatus() const { return motorStatus_; }
   void setMotorHandler(SecureMotorHandler handler) { motorHandler_=handler; }
-  LinkState state(uint32_t now) const { return peers_.state(1, now); }
+  LinkState state(uint32_t now) const { return peers_.state(config_.id, now); }
   SecureLinkStatus linkStatus(uint32_t now, bool channelAligned) const;
   uint32_t confirmations() const { return confirmations_; }
   const SecureRadioDiagnostics &diagnostics() const { return diagnostics_; }

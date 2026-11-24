@@ -104,14 +104,6 @@ bool ProximityEngine::confirmFound(uint32_t now) {
   return true;
 }
 
-SearchEvent ProximityEngine::confirmOrRestartSearch(uint32_t now, bool paired) {
-  if (found_) {
-    reset();
-    return SearchEvent::None;
-  }
-  return paired && confirmFound(now) ? SearchEvent::SphereFound : SearchEvent::None;
-}
-
 void ProximityEngine::reset() {
   *this = ProximityEngine(cfg_);
 }
@@ -121,4 +113,56 @@ void ProximityEngine::setSuspended(bool suspended, uint32_t now) {
   suspended_ = suspended;
   resumedAt_ = now;
   resumePending_ = !suspended;
+}
+
+void SphereSearch::setAssociated(uint8_t mask) {
+  associated_=mask & ((1u<<count)-1);
+  if (associated_ & maskFor(selected_)) return;
+  selected_=0;
+  for (uint8_t id=1; id<=count; ++id)
+    if (select(id)) break;
+}
+
+bool SphereSearch::select(uint8_t id) {
+  if (!(associated_ & maskFor(id)) || (found_ & maskFor(id))) return false;
+  selected_=id;
+  return true;
+}
+
+uint8_t SphereSearch::foundCount() const {
+  uint8_t total=0;
+  for (uint8_t id=1; id<=count; ++id) if (found_ & maskFor(id)) ++total;
+  return total;
+}
+
+ProximitySnapshot SphereSearch::snapshot(uint8_t id, uint32_t now) const {
+  if (!(associated_ & maskFor(id))) return {};
+  auto signal=signals_[id-1].snapshot(now);
+  if (found_ & maskFor(id)) signal.state=ProximityState::Found;
+  return signal;
+}
+
+void SphereSearch::sample(uint8_t id, int8_t rssi, uint32_t received, uint32_t now) {
+  if (associated_ & maskFor(id)) signals_[id-1].sample(rssi,received,now);
+}
+
+void SphereSearch::invalidate(uint8_t id) {
+  if (associated_ & maskFor(id)) signals_[id-1].invalidate();
+}
+
+void SphereSearch::setSuspended(bool suspended, uint32_t now) {
+  for (auto &signal : signals_) signal.setSuspended(suspended,now);
+}
+
+SearchEvent SphereSearch::confirm(uint32_t now, bool paired) {
+  const uint8_t selectedBit=maskFor(selected_);
+  if (!paired || !(associated_ & selectedBit) || (found_ & selectedBit) ||
+      !signals_[selected_-1].confirmFound(now)) return SearchEvent::None;
+  found_|=selectedBit;
+  return SearchEvent::SphereFound;
+}
+
+void SphereSearch::newGame() {
+  found_=0;
+  for (auto &signal : signals_) signal.reset();
 }

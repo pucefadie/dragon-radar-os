@@ -19,7 +19,12 @@ class DevRadioTx {
  public:
   bool init(bool allowDevPeer=true) {
     allowDevPeer_=allowDevPeer;
-    if (!packets_) packets_=xQueueCreate(8,sizeof(DevTxPacket));
+#if CONFIG_IDF_TARGET_ESP32S3
+    const unsigned depth=allowDevPeer ? 8 : 24;
+#else
+    constexpr unsigned depth=8;
+#endif
+    if (!packets_) packets_=xQueueCreate(depth,sizeof(DevTxPacket));
     return packets_!=nullptr;
   }
   bool enqueue(const uint8_t *mac,const uint8_t *bytes,size_t size=RADIO_FRAME_SIZE,uint16_t ttlMs=1000) {

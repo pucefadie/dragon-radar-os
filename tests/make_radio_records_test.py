@@ -1,4 +1,5 @@
 from pathlib import Path
+import hmac
 import stat
 import subprocess
 import sys
@@ -35,6 +36,29 @@ class RecordsTest(unittest.TestCase):
             result = subprocess.run(cmd, input=sample, text=True, capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual((dest / "radar.bin").read_bytes(), radar)
+
+    def test_extend_existing_domain(self):
+        generator = Path(__file__).parent.parent / "scripts/make_radio_records.py"
+        sample = "02:00:00:00:00:01\n02:00:00:00:00:07\n"
+        with TemporaryDirectory() as directory:
+            base = Path(directory)
+            for scheme in (b"DRC1", b"DRC2"):
+                record = scheme + bytes((1, 6)) + bytes.fromhex("020000000002") + bytes(range(64))
+                anchor = base / "anchor.bin"
+                anchor.write_bytes(record)
+                dest = base / (scheme.decode() + "-sphere7")
+                cmd = [sys.executable, generator, dest, "--id", "7", "--channel", "6", "--domain-record", anchor]
+                subprocess.run(cmd, input=sample, text=True, capture_output=True, check=True)
+                radar = (dest / "radar.bin").read_bytes()
+                sphere = (dest / "sphere.bin").read_bytes()
+                self.assertEqual(radar[:6], b"DRC2\x07\x06")
+                self.assertEqual(radar[12:], sphere[12:])
+                self.assertNotEqual(radar[12:60], record[12:60])
+                expected = hmac.digest(record[28:60], b"DRA1 M1c bench shared PMK", "sha256")[:16]
+                self.assertEqual(radar[60:], expected if scheme == b"DRC1" else record[60:])
+                self.assertEqual(anchor.read_bytes(), record)
+            cmd = [sys.executable, generator, base / "wrong", "--id", "7", "--channel", "7", "--domain-record", anchor]
+            self.assertNotEqual(subprocess.run(cmd, input=sample, text=True, capture_output=True).returncode, 0)
 
 
 if __name__ == "__main__":

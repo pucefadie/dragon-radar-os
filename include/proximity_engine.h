@@ -31,7 +31,6 @@ class ProximityEngine {
   void sample(int8_t rssi, uint32_t received, uint32_t now);
   ProximitySnapshot snapshot(uint32_t now) const;
   bool confirmFound(uint32_t now);
-  SearchEvent confirmOrRestartSearch(uint32_t now, bool paired);
   void invalidate() { valid_ = false; }
   void reset();
   void setSuspended(bool suspended, uint32_t now);
@@ -50,4 +49,27 @@ class ProximityEngine {
   bool suspended_ = false, resumePending_ = false;
   SignalQuality quality_ = SignalQuality::Unavailable;
   ProximityState trend_ = ProximityState::Stable, pending_ = ProximityState::Stable;
+};
+
+// Game progress is separate from the transient signal filter and radio sessions.
+class SphereSearch {
+ public:
+  static constexpr uint8_t count=7;
+  void setAssociated(uint8_t mask);
+  bool select(uint8_t id);
+  uint8_t selected() const { return selected_; }
+  uint8_t associated() const { return associated_; }
+  uint8_t found() const { return found_; }
+  uint8_t foundCount() const;
+  ProximitySnapshot snapshot(uint8_t id, uint32_t now) const;
+  void sample(uint8_t id, int8_t rssi, uint32_t received, uint32_t now);
+  void invalidate(uint8_t id);
+  void setSuspended(bool suspended, uint32_t now);
+  SearchEvent confirm(uint32_t now, bool paired);
+  void newGame();
+
+ private:
+  static uint8_t maskFor(uint8_t id) { return id>=1 && id<=count ? uint8_t(1u<<(id-1)) : 0; }
+  ProximityEngine signals_[count];
+  uint8_t associated_=0, found_=0, selected_=0;
 };

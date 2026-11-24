@@ -3,12 +3,15 @@
 #include <cassert>
 #include <cstring>
 #include <deque>
+#include <memory>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 
 using Frame = std::array<uint8_t,SECURE_RADIO_SIZE>;
 struct Wire : SecureRadioIo {
   std::deque<Frame> queue;
+  std::deque<uint8_t> targets;
+  uint8_t destination=0;
   uint8_t counter;
   bool accepting = true;
   bool signing = true;
@@ -22,13 +25,13 @@ struct Wire : SecureRadioIo {
     memset(b,0,n);
     b[0]=++counter;
   }
-  bool send(const uint8_t *,const uint8_t *b,size_t n) override {
+  bool send(const uint8_t *mac,const uint8_t *b,size_t n) override {
     assert(n==SECURE_RADIO_SIZE);
     if (!accepting) return false;
-    Frame f; memcpy(f.data(),b,n); queue.push_back(f);
+    Frame f; memcpy(f.data(),b,n); queue.push_back(f); targets.push_back(mac[0]);
     return true;
   }
-  Frame take() { assert(!queue.empty()); Frame frame=queue.front(); queue.pop_front(); return frame; }
+  Frame take() { assert(!queue.empty()); Frame frame=queue.front(); queue.pop_front(); destination=targets.front(); targets.pop_front(); return frame; }
 };
 
 using Record = std::array<uint8_t,SECURE_CONFIG_SIZE>;
@@ -42,7 +45,7 @@ static SecureRadioConfig make(uint8_t peer) {
   Record record=makeRecord(peer);
   SecureRadioConfig cfg{};
   assert(!secureRadioDecodeConfig(record.data(),record.size()-1,cfg));
-  record[4]=2;
+  record[4]=8;
   assert(!secureRadioDecodeConfig(record.data(),record.size(),cfg));
   record[4]=1;
   record[5]=0;
@@ -62,7 +65,7 @@ struct StoredRecords {
 
 static SecureRecordRead readRecord(void *storage,const char *key,uint8_t *data,size_t &length) {
   auto &records=*static_cast<StoredRecords *>(storage);
-  const bool v2=std::strcmp(key,SECURE_RECORD_V2_KEY)==0;
+  const bool v2=std::strncmp(key,SECURE_RECORD_V2_KEY,7)==0;
   if (v2 && records.v2Status!=SecureRecordRead::Loaded) return records.v2Status;
   if (!v2) ++records.v1Reads;
   const auto &record=v2?records.v2:records.v1;
@@ -109,6 +112,18 @@ static void testRecords() {
   records.v1[60]=10; // The legacy stored PMK was local, not a shared value.
   assert(secureRadioLoadConfig(readRecord,&records,config));
   assert(secureRadioResolvePmk(config,io) && std::memcmp(config.pmk,benchPmk,16)==0);
+
+  records.v2Status=SecureRecordRead::Loaded;
+  records.v2=makeRecord(4);
+  records.v2[4]=7;
+  assert(std::strcmp(secureRadioRecordKey(7),"peer_v2_7")==0);
+  assert(secureRadioLoadConfig(readRecord,&records,config,7) && config.id==7);
+  assert(!secureRadioLoadConfig(readRecord,&records,config,6));
+  records.v2Status=SecureRecordRead::Missing;
+  const auto previousReads=records.v1Reads;
+  assert(!secureRadioLoadConfig(readRecord,&records,config,7) && records.v1Reads==previousReads);
+  records.v1[4]=7;
+  assert(!secureRadioDecodeConfig(records.v1.data(),records.v1.size(),config));
 
   Wire senderWire(20), receiverWire(40);
   auto wrong=make(2);
@@ -303,7 +318,86 @@ static void testMotorCommand() {
   assert(motorCalls==2 && sphereWire.queue.empty() && sphere.diagnostics().stale_session==1);
 }
 
+namespace {
+std::array<unsigned,SECURE_SPHERE_COUNT> spherePulses{};
+template<unsigned index>
+SecureMotorStatus spherePulse(uint32_t) {
+  ++spherePulses[index];
+  return SecureMotorStatus::Accepted;
+}
+}
+
+static void testSevenSpheres() {
+  const uint8_t radarMac[6]{2};
+  Wire radarWire(10), sphereWire(90);
+  std::array<std::unique_ptr<SecureRadio>,SECURE_SPHERE_COUNT> radar, spheres;
+  const SecureMotorHandler handler[]={
+    spherePulse<0>,spherePulse<1>,spherePulse<2>,spherePulse<3>,
+    spherePulse<4>,spherePulse<5>,spherePulse<6>
+  };
+  std::array<bool,SECURE_SPHERE_COUNT> enabled{};
+  enabled.fill(true);
+  for (uint8_t i=0; i<SECURE_SPHERE_COUNT; ++i) {
+    auto atRadar=make(uint8_t(4+2*i));
+    auto atSphere=make(2);
+    atRadar.id=atSphere.id=i+1;
+    atRadar.auth[0]=atSphere.auth[0]=uint8_t(20+i);
+    radar[i].reset(new SecureRadio(radarWire,true,atRadar));
+    spheres[i].reset(new SecureRadio(sphereWire,false,atSphere));
+    spheres[i]->setMotorHandler(handler[i]);
+  }
+  Frame lastMotor{};
+  auto pump=[&](uint32_t now) {
+    for (auto &link : radar) link->tick(now);
+    while (!radarWire.queue.empty()) {
+      const auto f=radarWire.take();
+      const unsigned ix=(radarWire.destination-4)/2;
+      assert(ix<SECURE_SPHERE_COUNT && f[6]==ix+1);
+      if (!enabled[ix]) continue;
+      const unsigned type=f[4];
+      if (type==7) {
+        lastMotor=f;
+        spheres[(ix+1)%SECURE_SPHERE_COUNT]->receive(radarMac,f.data(),f.size(),now);
+      }
+      spheres[ix]->receive(radarMac,f.data(),f.size(),now);
+    }
+    while (!sphereWire.queue.empty()) {
+      const auto f=sphereWire.take();
+      const unsigned ix=f[5]-1;
+      assert(ix<SECURE_SPHERE_COUNT && sphereWire.destination==radarMac[0] && f[6]==0);
+      const uint8_t sphereMac[6]{uint8_t(4+2*ix)};
+      radar[ix]->receive(sphereMac,f.data(),f.size(),now);
+    }
+  };
+  for (uint32_t t=0; t<800; t+=50) pump(t);
+  for (const auto &link : radar) assert(link->state(800)==LinkState::Paired && link->confirmations()==1);
+  assert(radar[6]->requestMotor(800));
+  pump(800);
+  assert(radar[6]->motorStatus()==SecureMotorStatus::Accepted);
+  assert(spherePulses[6]==1);
+  for (unsigned i=0; i<6; ++i) {
+    assert(spherePulses[i]==0);
+    assert(radar[i]->motorStatus()==SecureMotorStatus::Idle);
+  }
+  spheres[6]->receive(radarMac,lastMotor.data(),lastMotor.size(),801);
+  assert(spherePulses[6]==1);
+  const auto replayReply=sphereWire.take();
+  assert(replayReply[4]==8 && replayReply[5]==7);
+
+  enabled[2]=false;
+  for (uint32_t t=850; t<22000; t+=50) pump(t);
+  assert(radar[2]->state(22000)!=LinkState::Paired);
+  assert(radar[2]->confirmations()==1);
+  for (unsigned i=0; i<SECURE_SPHERE_COUNT; ++i) if (i!=2) {
+    assert(radar[i]->state(22000)==LinkState::Paired && radar[i]->confirmations()>1);
+  }
+  enabled[2]=true;
+  for (uint32_t t=22000; t<28500; t+=50) pump(t);
+  assert(radar[2]->state(28500)==LinkState::Paired && radar[2]->confirmations()>1);
+}
+
 int main() {
+  testSevenSpheres();
   testMotorCommand();
   testRecords();
 #if M1C_BENCH_FIXTURE

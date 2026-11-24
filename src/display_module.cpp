@@ -23,9 +23,9 @@ namespace {
 
 const char *secureLinkLabel(SecureLinkStatus status) {
   switch (status) {
-    case SecureLinkStatus::Paired: return "SFERA 1 AUTENTICATA";
-    case SecureLinkStatus::Lost: return "SFERA 1 LINK PERSO";
-    case SecureLinkStatus::AwaitingHandshake: return "SFERA 1 ATTESA HANDSHAKE";
+    case SecureLinkStatus::Paired: return "SFERA AUTENTICATA";
+    case SecureLinkStatus::Lost: return "SFERA LINK PERSO";
+    case SecureLinkStatus::AwaitingHandshake: return "SFERA ATTESA HANDSHAKE";
     case SecureLinkStatus::ChannelMismatch: return "CANALE RF NON ALLINEATO";
     case SecureLinkStatus::Unavailable: return "RADIO SICURA NON ATTIVA";
   }
@@ -1503,7 +1503,11 @@ void displayRenderRadarApp(const RadarView &v) {
   }
   char text[48];
   if (v.demo) snprintf(text,sizeof(text),"DEMO  %um",v.range_m);
-  else snprintf(text,sizeof(text),"CHIUSO  SFERA 1");
+  const auto game=beaconServiceSphereGame();
+  if (!v.demo) {
+    if (game.selected) snprintf(text,sizeof(text),"SFERA %u  TROVATE %u/7",unsigned(game.selected),unsigned(game.foundCount));
+    else snprintf(text,sizeof(text),"TROVATE %u/7",unsigned(game.foundCount));
+  }
   drawCenteredText(d, 62, text, RADAR_COLOR_BG, 2);
   snprintf(text,sizeof(text),"%s %03.0f %s",v.heading_up?"HEAD":"NORD",v.heading,v.compass_calibrated?"CAL":"RAW");
   drawCenteredText(d, 88, text, RADAR_COLOR_BG, 1);
@@ -1518,7 +1522,21 @@ void displayRenderRadarApp(const RadarView &v) {
   } else {
     const auto &signal = v.proximity;
     const bool found = signal.state == ProximityState::Found;
-    const bool available = link == SecureLinkStatus::Paired && signal.fresh;
+    const bool available = !found && link == SecureLinkStatus::Paired && signal.fresh;
+    for (uint8_t id=1; id<=SphereSearch::count; ++id) {
+      const uint8_t bit=1u<<(id-1);
+      const bool associated=game.associated & bit;
+      const bool completed=game.found & bit;
+      const int x=RADAR_SPHERE_X+(id-1)*RADAR_SPHERE_PITCH;
+      const uint16_t color=completed ? RADAR_COLOR_GRID_BRIGHT : associated ? RADAR_COLOR_WHITE : RADAR_COLOR_GRAY;
+      d->fillRoundRect(x,RADAR_SPHERE_Y,RADAR_SPHERE_WIDTH,RADAR_SPHERE_HEIGHT,5,RADAR_COLOR_BG);
+      d->drawRoundRect(x,RADAR_SPHERE_Y,RADAR_SPHERE_WIDTH,RADAR_SPHERE_HEIGHT,5,
+                       game.selected==id ? RADAR_COLOR_YELLOW : color);
+      d->setTextSize(2);
+      d->setTextColor(color);
+      d->setCursor(x+14,RADAR_SPHERE_Y+6);
+      d->print(unsigned(id));
+    }
     constexpr int ringCount = 3;
     constexpr int stepsPerRing = kProximityMaxLevel / ringCount;
     const int level = available ? signal.level : 0;
@@ -1529,11 +1547,17 @@ void displayRenderRadarApp(const RadarView &v) {
       for (int j = 0; j < 2*steps; ++j)
         d->drawCircle(233,233,radius+j,RADAR_COLOR_YELLOW);
     }
-    drawCenteredText(d, 324, proximityLabel(signal,link), RADAR_COLOR_YELLOW, 2);
-    drawCenteredText(d, 349,secureLinkLabel(link),RADAR_COLOR_BG,1);
-    if (available || found) {
+    const char *proximityText=game.foundCount==SphereSearch::count ? "TUTTE LE SFERE TROVATE" :
+                              game.selected ? proximityLabel(signal,link) : "NESSUNA SFERA ASSOCIATA";
+    drawCenteredText(d, 308, proximityText, RADAR_COLOR_YELLOW, 2);
+    drawCenteredText(d, 337,secureLinkLabel(link),RADAR_COLOR_BG,1);
+    if (available) {
       d->fillRoundRect(RADAR_FOUND_X,RADAR_FOUND_Y,RADAR_FOUND_WIDTH,RADAR_FOUND_HEIGHT,8,RADAR_COLOR_BG);
-      drawCenteredText(d, 388,found ? "NUOVA RICERCA" : "CONFERMA RITROVAMENTO",RADAR_COLOR_WHITE,2);
+      drawCenteredText(d, 367,"CONFERMA RITROVAMENTO",RADAR_COLOR_WHITE,2);
+    }
+    if (game.foundCount) {
+      d->fillRoundRect(RADAR_GAME_X,RADAR_GAME_Y,RADAR_GAME_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
+      drawCenteredText(d, 404,"NUOVA PARTITA",RADAR_COLOR_WHITE,2);
     }
   }
   d->fillRoundRect(207, 432, 52, 5, 2, RADAR_COLOR_GRID_BRIGHT); flushDisplay();
@@ -1613,7 +1637,10 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
     const auto link = beaconServiceSecureLinkStatus();
     const auto status = beaconServiceSphereMotorStatus();
     const bool enabled = link == SecureLinkStatus::Paired && status != SecureMotorStatus::Pending;
-    drawCenteredText(d,120,"VIBRAZIONE SFERA",RADAR_COLOR_GRID_BRIGHT,2);
+    const auto game=beaconServiceSphereGame();
+    char title[32];
+    snprintf(title,sizeof(title),"VIBRAZIONE SFERA %u",unsigned(game.selected));
+    drawCenteredText(d,120,game.selected?title:"VIBRAZIONE SFERA",RADAR_COLOR_GRID_BRIGHT,2);
     drawCenteredText(d,167,secureLinkLabel(link),RADAR_COLOR_WHITE,2);
     d->fillRoundRect(DEBUG_SPHERE_MOTOR_X,DEBUG_SPHERE_MOTOR_Y,DEBUG_SPHERE_MOTOR_WIDTH,
                      DEBUG_SPHERE_MOTOR_HEIGHT,8,enabled ? RADAR_COLOR_GRID_MID : RADAR_COLOR_GRID_DARK);

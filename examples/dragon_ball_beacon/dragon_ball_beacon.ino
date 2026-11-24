@@ -38,7 +38,7 @@ static Dra1UserLed userLed;
 #if DRAGON_RADIO_CHANNEL < 1 || DRAGON_RADIO_CHANNEL > 13
 #error DRAGON_RADIO_CHANNEL must be between 1 and 13 and legal for your region
 #endif
-#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE && ARDUINO_USB_CDC_ON_BOOT && DRAGON_BALL_ID == 1
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE && ARDUINO_USB_CDC_ON_BOOT
 #define SPHERE_MOTOR_USB_TEST 1
 #include "sphere_motor_rmt.h"
 #include "sphere_rgb.h"
@@ -92,9 +92,7 @@ static void devReceive(const esp_now_recv_info_t *info,const uint8_t *data,int l
 static DevRadioTx radioTx;
 static SecureEspNow secure(radioTx);
 static void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { radioTx.completed(status); }
-#if DRAGON_BALL_ID == 1
 static void secureReceive(const esp_now_recv_info_t *info,const uint8_t *bytes,int len) { secure.enqueue(info,bytes,len); }
-#endif
 #endif
 static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
@@ -137,9 +135,8 @@ void setup() {
   Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
 #else
   if (!radioTx.init(false) || esp_now_register_send_cb(txDone)!=ESP_OK) { ready=false; return; }
-#if DRAGON_BALL_ID == 1
   if (esp_now_register_recv_cb(secureReceive)==ESP_OK) {
-    const bool secureReady = secure.begin(false);
+    const bool secureReady = secure.begin(false,nullptr,DRAGON_BALL_ID);
 #if SPHERE_MOTOR_USB_TEST
     if (motorLow && secureReady && motor.begin() &&
         motor.request(millis(), kMotorStartupPulseMs) == MotorTestResult::Started) {
@@ -150,7 +147,6 @@ void setup() {
     (void)secureReady;
 #endif
   }
-#endif
 #endif
   Serial.printf("Dragon beacon ID=%d channel=%d (broadcast, not authenticated)\n",DRAGON_BALL_ID,DRAGON_RADIO_CHANNEL);
 }

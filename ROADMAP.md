@@ -27,7 +27,7 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 
 - DRC2 con PMK casuale per dominio e LMK/HMAC per coppia. Lettura DRC1 compatibile con il banco senza scrivere NVS. Priorità DRC2 senza downgrade su errori.
 - Il percorso radio standard con DRC1 esistente ha superato handshake, conferme applicative e recupero dopo il riavvio di ciascuna scheda. Il collaudo DRC2, la cattura CCMP indipendente e il ripristino effettivo da ROM restano da verificare.
-- L'estensione a ID 1–7 conserverà un solo valore PMK per radio e una configurazione separata per peer. Il limite software corrente è ID 1.
+- Il banco M1d era limitato a ID 1. M3 multisfera mantiene una PMK per radio e una configurazione per peer.
 
 ## M2 — Esperienza radar (successiva a M1)
 - **M2a completata** stato DRA1 della sfera ID 1 nel Radar e in Debug, banco S3 UI Trial offline e C6 sul canale 6. Verificati pairing, UI e ripresa dopo standby.
@@ -42,7 +42,8 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Verificare sul banco IMR14500 500 mAh + protezione PCM 1S, carica, connessioni, massimi di corrente e tensione; non assumere protezioni integrate.
 - **M3a PASS funzionale via USB** impulso di avvio, comando seriale, cooldown e stabilità DRA1 sotto carico verificati. Durate elettriche, transitori di reset e tenuta della 3V3 restano da misurare. Tre WS2812B predisposti su D5 e disabilitati.
 - **M3b PASS funzionale via USB** comando manuale DRA1 da Debug. Test host, build S3/C6, installazione, 60 s DRA1 e prova supervisionata del Grove passati. Due impulsi ai tocchi accettati e nessun impulso durante il cooldown. Restano aperte le misure strumentali M3a.
-- **M3c** feedback DRA1 sulla conferma manuale del ritrovamento ed evento software per future animazioni RGB. Test host, build S3, installazione OTA1 e prova DRA1 sul canale 6 passati. Primo riscontro del ritrovamento positivo. Da completare la verifica supervisionata di nuova ricerca, tocchi ripetuti e comando Debug.
+- **M3c PASS funzionale** l'operatore ha confermato il collaudo del feedback al ritrovamento. Le app S3 M3c e C6 M3b sono la baseline.
+- **M3 multisfera** sette peer autenticati, selezione, vibrazione indirizzata, ritrovamenti e Nuova partita. Simulazione con sette sfere e build S3/C6 completate. Restano provisioning e collaudo hardware autorizzati.
 - Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 

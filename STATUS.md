@@ -31,11 +31,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | C6 standard no_ota | 970880 | `89ec01d90823313771fe393489384f512bd295670d7f7f1630a5563e19f9b61f` |
 | C6 provisioning no_ota | 263008 | `705a737d66416b8fff38a276d79981177f50ea5f208485db3603b931044b7d64` |
 
-## Prossime azioni M3c
+## Prossime azioni M3 multisfera
 
-1. Dopo autorizzazione, acquisire backup corrente del radar e verificare la selezione OTA1.
-2. Installare e verificare in rilettura la sola app S3 M3c, usando il C6 M3b già collaudato.
-3. Confermare una sfera da Radar → Reale e verificare un solo impulso. Ripetere la prova durante il cooldown per confermare che il ritrovamento resti valido anche senza vibrazione. Verificare anche il comando manuale in Debug.
+1. Conservare gli artefatti S3 M3c e C6 M3b come baseline funzionante.
+2. Con autorizzazione separata, provare il candidato S3 con la sfera 1 già associata. Poi aggiungere una sfera per volta tramite l'utility USB.
+3. Collaudare tutti e sette i link insieme, selezione, vibrazione indirizzata, esclusione dei ritrovamenti e Nuova partita.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -365,3 +365,21 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS via S3** AMOLED e controller touch inizializzati. DRA1 Paired per 60,19 s sul canale 6 senza AP, conferme 1 → 9, 27 retry di probe, zero drop, rifiuti di autenticazione o errori di consegna nella finestra. La seriale C6 è rimasta silenziosa durante il campione. Il peer rispondeva via DRA1 autenticato. Misure RSSI valide a campione, taratura M2b.1 rinviata.
 - **Primo riscontro operatore** prima conferma funzionante. Il radar riportava esito applicativo accettato all'inizio del monitoraggio touch. La prova completa di nuova ricerca, tocchi ripetuti e comando manuale resta da registrare.
 - **PASS conferma applicativa aggiuntiva** durante 144 s di monitoraggio S3 osservati stato iniziale accettato e un'altra transizione attesa → accettato, con DRA1 Paired e conferme 16 → 39. Retry di probe 46 → 108, zero nuovi drop, rifiuti di autenticazione o errori di consegna. La seriale non distingue se la richiesta parte dalla schermata Radar o da Debug. Riscontro specifico dell'operatore su nuova ricerca, assenza di impulsi ai tocchi ripetuti e Debug ancora in attesa.
+
+
+### Esito finale M3c
+
+**PASS funzionale riferito dall'operatore.** Il collaudo di ritrovamento è completato. Conservate come baseline le app installate S3 M3c e C6 M3b con relativi readback. Taratura M2b.1 e misure strumentali M3a restano aperte.
+
+## M3 — sette sfere fisiche
+
+- Il radar gestisce sette sessioni DRA1 concorrenti con indirizzi, HMAC, contatori, RSSI, freschezza e ritrovamenti per ID. La schermata reale permette di scegliere una sfera associata e mostra il totale da 0/7 a 7/7. I ritrovamenti restano validi dopo perdita radio e standby. **Nuova partita** azzera i ritrovamenti in RAM e richiede nuove misure senza toccare le associazioni.
+- La vibrazione da Radar o Debug usa il peer associato all'ID selezionato. Il driver e i tempi M3b sono gli stessi. Nessun cambio a cablaggio, antenna, scala RSSI o RGB.
+- DRA1 conserva frame, tipi, nonce e ACK. Per ID 1 restano compatibili firmware e record M3b. Le sfere aggiuntive usano record DRC2 separati. PMK e canale sono condivisi nel dominio e LMK e HMAC sono specifici per coppia. Il core S3 3.3.12 installato espone sette peer ESP-NOW cifrati nel suo sdkconfig. La capacità simultanea reale resta da provare.
+- **PASS host** suite di prossimità e radio con sette sfere simulate. Verificati isolamento dell'RSSI, perdita e recupero indipendenti, comando inviato solo a ID 7, replay e duplicati, conteggio 7/7 e nuovo gioco con associazioni intatte. Conservate le regressioni ID 1, M3b, gesture e standby.
+- **PASS build** S3 UI Trial, C6 radio ID 7 e utility USB S3/C6 su Arduino ESP32 3.3.12. Il primo tentativo S3 ha rilevato un conflitto tra il nome di un helper e la macro Arduino `bit`, corretto prima della ricompilazione riuscita. Verificati target, checksum, hash d'immagine, tabelle rispetto ai backup ROM e separazione tra radio e provisioning. I binari e i log sono fuori da Git.
+  - S3 UI Trial da 1.779.920 byte, app OTA1 a `0x310000`, SHA-256 `4f78dff262259e7bf4ff1e99fdacf390cd9ba231c702a9cc83f053dede8ddcf1`.
+  - C6 radio ID 7 da 980.192 byte, app0 a `0x10000`, SHA-256 `c47d1694f73a4e67ff209a426240b35f3ce7cbe8b9737467c9b91a0c674deb32`. Gli ID 2–6 usano lo stesso sketch compilato con il valore assegnato.
+  - Utility USB S3 da 378.800 byte, SHA-256 `75f59bd865f146d59eb4ce7fe37d75e87340f252e30854eb825e16dc42aabc41`. Utility USB C6 da 245.472 byte, SHA-256 `b1bf375a08edc30aa72b622d7e7e7243670f9fbf2832c02202baede82bb7e27d`.
+- **PASS provisioning simulato** due test del generatore, con estensione DRC1/DRC2, e sei casi del loader USB, compresa scrittura su slot separati e rifiuto della sovrascrittura.
+- **NOT RUN fisico** misura dei sette link, provisioning reale e collaudo dei binari. Nessun flash, reset o scrittura NVS in questa fase. Procedura individuale documentata in [PROTOCOL_AND_POWER.md](PROTOCOL_AND_POWER.md).

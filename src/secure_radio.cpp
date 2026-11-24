@@ -29,13 +29,14 @@ uint32_t get32(const uint8_t *b) { uint32_t n=0; for(unsigned i=0;i<4;++i) n|=ui
 bool secureRadioDecodeConfig(const uint8_t *b,size_t len,SecureRadioConfig &out) {
   // Versioned magic, sphere ID, channel, peer MAC, LMK, auth key, PMK field.
   if (!b || len!=SECURE_CONFIG_SIZE || std::memcmp(b,"DRC",3) ||
-      (b[3]!='1' && b[3]!='2') || b[4]!=1 ||
+      (b[3]!='1' && b[3]!='2') || b[4]<1 || b[4]>SECURE_SPHERE_COUNT || (b[3]=='1' && b[4]!=1) ||
       b[5]<1 || b[5]>13 || (b[6]&1) || !nonzero(b+6,6) ||
       !nonzero(b+12,16) || !nonzero(b+28,32) || !nonzero(b+60,16) ||
       equal(b+12,b+60,16)) return false;
   if (b[3]=='2' && (equal(b+60,b+28,16) || equal(b+60,b+44,16) ||
                     equal(b+12,b+28,16) || equal(b+12,b+44,16))) return false;
   out.version=b[3]=='2'?SecureRecordVersion::V2:SecureRecordVersion::V1;
+  out.id=b[4];
   out.channel=b[5];
   std::memcpy(out.peer,b+6,6);
   std::memcpy(out.lmk,b+12,16);
@@ -49,18 +50,26 @@ void secureRadioClear(void *data,size_t length) {
   while (length--) *bytes++=0;
 }
 
-bool secureRadioLoadConfig(SecureRecordReader read,void *storage,SecureRadioConfig &out) {
+const char *secureRadioRecordKey(uint8_t id) {
+  static constexpr const char *keys[]={
+    SECURE_RECORD_V2_KEY,"peer_v2_2","peer_v2_3","peer_v2_4","peer_v2_5","peer_v2_6","peer_v2_7"
+  };
+  return id>=1 && id<=SECURE_SPHERE_COUNT ? keys[id-1] : nullptr;
+}
+
+bool secureRadioLoadConfig(SecureRecordReader read,void *storage,SecureRadioConfig &out,uint8_t id) {
   uint8_t data[SECURE_CONFIG_SIZE]{};
   size_t length=sizeof(data);
   SecureRecordVersion expected=SecureRecordVersion::V2;
-  SecureRecordRead result=read(storage,SECURE_RECORD_V2_KEY,data,length);
-  if (result==SecureRecordRead::Missing) {
+  const char *key=secureRadioRecordKey(id);
+  SecureRecordRead result=key ? read(storage,key,data,length) : SecureRecordRead::Error;
+  if (id==1 && result==SecureRecordRead::Missing) {
     expected=SecureRecordVersion::V1;
     length=sizeof(data);
     result=read(storage,SECURE_RECORD_V1_KEY,data,length);
   }
   const bool valid=result==SecureRecordRead::Loaded &&
-    secureRadioDecodeConfig(data,length,out) && out.version==expected;
+    secureRadioDecodeConfig(data,length,out) && out.version==expected && out.id==id;
   secureRadioClear(data,sizeof(data));
   if (!valid) secureRadioClear(&out,sizeof(out));
   return valid;
@@ -83,14 +92,14 @@ bool secureRadioResolvePmk(SecureRadioConfig &config,SecureRadioIo &io) {
 SecureRadio::SecureRadio(SecureRadioIo &io,bool controller,const SecureRadioConfig &config)
     : io_(io),controller_(controller),config_(config) {
   peers_.open(0,1);
-  peers_.pair(1,config_.peer,config_.lmk,0);
+  peers_.pair(config_.id,config_.peer,config_.lmk,0);
   secureRadioClear(config_.pmk,sizeof(config_.pmk));
   secureRadioClear(config_.lmk,sizeof(config_.lmk));
 }
 
 bool SecureRadio::pack(uint8_t *b,Kind kind,const Nonces &nonce,uint32_t seq,uint32_t ack) {
   std::memcpy(b,"DRA1",4);
-  b[4]=uint8_t(kind); b[5]=controller_?0:1; b[6]=controller_?1:0; b[7]=0;
+  b[4]=uint8_t(kind); b[5]=controller_?0:config_.id; b[6]=controller_?config_.id:0; b[7]=0;
   put32(b+8,seq); put32(b+12,ack);
   std::memcpy(b+16,nonce.a,16); std::memcpy(b+32,nonce.b,16);
   return io_.sign(config_.auth,b,48,b+48);
@@ -106,7 +115,7 @@ void SecureRadio::established(uint32_t now) {
   motorReplay_.beginAuthenticatedSession(handle,true);
   cancelMotorRequest();
   motorSequence_=lastMotorRequest_=0;
-  peers_.beginAuthenticatedSession(1,config_.peer,handle,now,true);
+  peers_.beginAuthenticatedSession(config_.id,config_.peer,handle,now,true);
   online_=true;
   attempting_=false;
   seq_=lastProbe_=0;
@@ -170,7 +179,7 @@ bool SecureRadio::requestMotor(uint32_t now) {
   uint8_t frame[SECURE_RADIO_SIZE];
   const uint32_t sequence=++motorSequence_;
   if (!pack(frame,Kind::Vibrate,current_,sequence,0) ||
-      !motorAck_.begin(1,config_.peer,handle,sequence,frame,sizeof(frame),now)) {
+      !motorAck_.begin(config_.id,config_.peer,handle,sequence,frame,sizeof(frame),now)) {
     motorStatus_=SecureMotorStatus::Unconfirmed;
     return false;
   }
@@ -188,7 +197,7 @@ void SecureRadio::cancelMotorRequest() {
 
 void SecureRadio::tick(uint32_t now) {
   if (!controller_) return;
-  if (online_ && peers_.state(1,now)!=LinkState::Paired) online_=false;
+  if (online_ && peers_.state(config_.id,now)!=LinkState::Paired) online_=false;
   if (!online_) {
     cancelMotorRequest();
     if (!attempting_ || now-started_>=handshakeMs) {
@@ -214,7 +223,7 @@ void SecureRadio::tick(uint32_t now) {
     if (seq_==maxSequence) { online_=false; cancelMotorRequest(); return; } // Renew before signed replay window wraps.
     ++seq_;
     if (pack(frame,Kind::Probe,current_,seq_,0))
-      ack_.begin(1,config_.peer,handle,seq_,frame,sizeof(frame),now);
+      ack_.begin(config_.id,config_.peer,handle,seq_,frame,sizeof(frame),now);
     nextProbe_=now+intervalMs;
   }
   if (!ack_.due(now,frame,length)) return;
@@ -229,7 +238,7 @@ void SecureRadio::tick(uint32_t now) {
 }
 SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t len,uint32_t now,uint32_t queueAge) {
   if (!source || !b || len!=SECURE_RADIO_SIZE || !equal(source,config_.peer,6) ||
-      std::memcmp(b,"DRA1",4) || b[5]!=(controller_?1:0) || b[6]!=(controller_?0:1) || b[7]) return SecureRxEvent::None;
+      std::memcmp(b,"DRA1",4) || b[5]!=(controller_?config_.id:0) || b[6]!=(controller_?0:config_.id) || b[7]) return SecureRxEvent::None;
   const Kind kind=Kind(b[4]);
   const uint32_t seq=get32(b+8), ack=get32(b+12);
   Nonces nonce{};
@@ -280,7 +289,7 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       established(now);
       return SecureRxEvent::SessionStarted;
     } else if ((kind==Kind::Ack || kind==Kind::VibrateResult) && online_ && current &&
-               peers_.state(1,now)==LinkState::Paired) {
+               peers_.state(config_.id,now)==LinkState::Paired) {
 #if M1C_BENCH_FIXTURE
       if (kind==Kind::Ack && benchAction_==M1cRadioAction::DropAck && ack_.pending() && ack==seq_) {
         ++benchResult_.ack_dropped;
@@ -289,13 +298,13 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       }
 #endif
       RadioFrame result{};
-      result.type=RadioMessage::CommandAck; result.id=1; result.destination=0;
+      result.type=RadioMessage::CommandAck; result.id=config_.id; result.destination=0;
       result.session=handle; result.ack_sequence=ack;
       if (kind==Kind::VibrateResult) {
         if (now-motorStarted_>=motorWindowMs) cancelMotorRequest();
         else if (motorAck_.acknowledge(source,result,true)) motorStatus_=SecureMotorStatus(seq);
       } else if (ack_.acknowledge(source,result,true)) {
-        peers_.markAuthenticatedRx(1,source,handle,now,true);
+        peers_.markAuthenticatedRx(config_.id,source,handle,now,true);
         ++confirmations_;
         return SecureRxEvent::ProbeAck;
       }
@@ -321,17 +330,17 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       established(now);
       emit(Kind::Ready,current_);
     }
-  } else if (kind==Kind::Vibrate && online_ && current && peers_.state(1,now)==LinkState::Paired) {
+  } else if (kind==Kind::Vibrate && online_ && current && peers_.state(config_.id,now)==LinkState::Paired) {
     if (motorReplay_.accept(handle,seq)) {
       lastMotorRequest_=seq;
       lastMotorResult_=motorHandler_ ? motorHandler_(now) : SecureMotorStatus::Unavailable;
       if (!motorResult(uint8_t(lastMotorResult_))) lastMotorResult_=SecureMotorStatus::Unavailable;
     }
     if (seq==lastMotorRequest_) emit(Kind::VibrateResult,current_,uint8_t(lastMotorResult_),seq);
-  } else if (kind==Kind::Probe && online_ && current && peers_.state(1,now)==LinkState::Paired) {
+  } else if (kind==Kind::Probe && online_ && current && peers_.state(config_.id,now)==LinkState::Paired) {
     if (replay_.accept(handle,seq)) {
       lastProbe_=seq;
-      peers_.markAuthenticatedRx(1,source,handle,now,true);
+      peers_.markAuthenticatedRx(config_.id,source,handle,now,true);
       ++confirmations_;
     } else if (seq==lastProbe_) {
       ++diagnostics_.duplicate_probe;

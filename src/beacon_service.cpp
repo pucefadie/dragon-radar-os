@@ -37,10 +37,10 @@ DevRadioTx secureTx;
 SecureEspNow secure(secureTx);
 bool secureReady=false;
 #if CONFIG_IDF_TARGET_ESP32S3
-ProximityEngine proximity;
-void observeProximity(SecureRxEvent event, int8_t rssi, uint32_t received) {
-  if (event==SecureRxEvent::SessionStarted) proximity.invalidate();
-  else if (event==SecureRxEvent::ProbeAck) proximity.sample(rssi,received,millis());
+SphereSearch sphereSearch;
+void observeProximity(uint8_t id, SecureRxEvent event, int8_t rssi, uint32_t received) {
+  if (event==SecureRxEvent::SessionStarted) sphereSearch.invalidate(id);
+  else if (event==SecureRxEvent::ProbeAck) sphereSearch.sample(id,rssi,received,millis());
 }
 #endif
 void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { secureTx.completed(status); }
@@ -85,6 +85,9 @@ void beaconServiceInit() {
     secureReady=txRegisterResult==ESP_OK && secure.begin(true, wifiServicePrepareOfflineChannel);
 #else
     secureReady=txRegisterResult==ESP_OK && secure.begin(true);
+#endif
+#if CONFIG_IDF_TARGET_ESP32S3
+    sphereSearch.setAssociated(secure.configuredMask());
 #endif
   }
 #endif
@@ -131,7 +134,8 @@ void beaconServiceUpdate() {
     const uint32_t now=millis();
 #if CONFIG_IDF_TARGET_ESP32S3
     secure.tick(now, observeProximity);
-    if (secure.linkStatus(now)!=SecureLinkStatus::Paired) proximity.invalidate();
+    for (uint8_t id=1; id<=SphereSearch::count; ++id)
+      if (secure.linkStatus(now,id)!=SecureLinkStatus::Paired) sphereSearch.invalidate(id);
 #else
     secure.tick(now);
 #endif
@@ -146,42 +150,86 @@ uint8_t beaconServiceChannel() {
 
 SecureLinkStatus beaconServiceSecureLinkStatus() {
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
-  if (secureReady) return secure.linkStatus(millis());
+  if (secureReady) {
+#if CONFIG_IDF_TARGET_ESP32S3
+    return sphereSearch.selected() ? secure.linkStatus(millis(),sphereSearch.selected()) : SecureLinkStatus::Unavailable;
+#else
+    return secure.linkStatus(millis());
+#endif
+  }
 #endif
   return SecureLinkStatus::Unavailable;
 }
+SphereGameView beaconServiceSphereGame() {
+  SphereGameView view;
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  view.selected=sphereSearch.selected();
+  view.associated=sphereSearch.associated();
+  view.found=sphereSearch.found();
+  view.foundCount=sphereSearch.foundCount();
+#endif
+  return view;
+}
+
+bool beaconServiceSelectSphere(uint8_t id) {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  return sphereSearch.select(id);
+#else
+  (void)id;
+  return false;
+#endif
+}
+
+void beaconServiceNewGame() {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  sphereSearch.newGame();
+#endif
+}
+
 ProximitySnapshot beaconServiceProximity() {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
-  return proximity.snapshot(millis());
+  return sphereSearch.snapshot(sphereSearch.selected(),millis());
 #else
   return {};
 #endif
 }
 void beaconServiceSetProximitySuspended(bool suspended) {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
-  proximity.setSuspended(suspended,millis());
+  sphereSearch.setSuspended(suspended,millis());
   if (suspended) secure.cancelMotorRequest();
 #else
   (void)suspended;
 #endif
 }
-SearchEvent beaconServiceConfirmOrRestartSearch() {
+SearchEvent beaconServiceConfirmSphereFound() {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   const uint32_t now=millis();
-  return proximity.confirmOrRestartSearch(now, secureReady && secure.linkStatus(now)==SecureLinkStatus::Paired);
+  return sphereSearch.confirm(now, beaconServiceSecureLinkStatus()==SecureLinkStatus::Paired);
 #else
   return SearchEvent::None;
 #endif
 }
 void beaconServiceRequestSphereMotor() {
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
-  if (secureReady) secure.requestMotor(millis());
+  if (secureReady) {
+#if CONFIG_IDF_TARGET_ESP32S3
+    if (sphereSearch.selected()) secure.requestMotor(millis(),sphereSearch.selected());
+#else
+    secure.requestMotor(millis());
+#endif
+  }
 #endif
 }
 
 SecureMotorStatus beaconServiceSphereMotorStatus() {
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
-  if (secureReady) return secure.motorStatus();
+  if (secureReady) {
+#if CONFIG_IDF_TARGET_ESP32S3
+    return sphereSearch.selected() ? secure.motorStatus(sphereSearch.selected()) : SecureMotorStatus::Unavailable;
+#else
+    return secure.motorStatus();
+#endif
+  }
 #endif
   return SecureMotorStatus::Unavailable;
 }
@@ -225,7 +273,14 @@ void beaconServicePrint(Stream &out) {
     out.printf("  #%u: %s signal=%d dBm age=%lu ms seq=%lu boot=%08lx battery=%u mV\n",i+1,fresh?"RICEVUTA NON AUTENTICATA":"SCADUTA",e.rssi,(unsigned long)age,(unsigned long)e.frame.sequence,(unsigned long)e.frame.boot_id,e.frame.battery_valid?e.frame.battery_mv:0);
   }
 #if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+#if CONFIG_IDF_TARGET_ESP32S3
+  secure.print(out,millis(),sphereSearch.selected());
+  out.printf("DRA1_GAME_SELECTED=%u DRA1_GAME_ASSOCIATED=%u DRA1_GAME_FOUND=%u DRA1_GAME_FOUND_MASK=%u\n",
+             unsigned(sphereSearch.selected()),unsigned(sphereSearch.associated()),
+             unsigned(sphereSearch.foundCount()),unsigned(sphereSearch.found()));
+#else
   secure.print(out,millis());
+#endif
   out.printf("DRA1_SPHERE_MOTOR_STATUS=%u\n",unsigned(beaconServiceSphereMotorStatus()));
 #if CONFIG_IDF_TARGET_ESP32S3
   const auto signal=beaconServiceProximity();

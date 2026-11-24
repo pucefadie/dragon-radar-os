@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Compile only. Isolate the C6 board and role so no other sketch is staged.
 set -euo pipefail
-if [[ $# != 2 || ! "$1" =~ ^(radio|provision)$ || -e "$2" ]]; then
-  echo "Usage: $0 radio|provision NEW_OUTPUT_DIRECTORY" >&2
+if [[ $# -lt 2 || $# -gt 3 || ! "$1" =~ ^(radio|provision)$ || -e "$2" ||
+      ! "${3:-1}" =~ ^[1-7]$ || ( "$1" == provision && $# == 3 ) ]]; then
+  echo "Usage: $0 radio NEW_OUTPUT_DIRECTORY [ID 1..7] | provision NEW_OUTPUT_DIRECTORY" >&2
   exit 2
 fi
 project="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,7 +27,7 @@ cp "$project/include/"{beacon_protocol,dev_radio,dev_radio_tx,radio_link,secure_
 cp "$project/src/"{beacon_protocol,dev_radio,radio_link,secure_radio}.cpp "$stage/"
 if [[ "$role" == radio ]]; then
   cp "$project/examples/$sketch/"{dra1_user_led,sphere_motor,sphere_motor_gpio,sphere_motor_rmt,sphere_rgb}.h "$stage/"
-  printf '#pragma once\n#define DRAGON_BALL_ID 1\n#define DRAGON_RADIO_CHANNEL 6\n' >"$stage/beacon_config.h"
+  printf '#pragma once\n#define DRAGON_BALL_ID %d\n#define DRAGON_RADIO_CHANNEL 6\n' "${3:-1}" >"$stage/beacon_config.h"
 fi
 cli="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 "$cli" compile --fqbn 'esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota,CDCOnBoot=cdc' \
