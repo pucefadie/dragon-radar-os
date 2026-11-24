@@ -34,7 +34,7 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - **M2b Chiuso** RSSI degli ACK DRA1 autenticati, filtro con isteresi, conferma manuale del ritrovamento e diagnostica della freschezza. Test software e collaudo fisico qualitativo passati.
 - **M2b.1 scala RSSI** 15 livelli grafici su tre anelli, con più risoluzione a segnale forte. Isteresi grafica separata da qualità RSSI e stato DRA1. Test host e build S3 UI Trial passati. Confronto sul campo con M2b ancora da eseguire con la configurazione radio già collaudata.
 - UI e launcher bottom-up con modalità Radar / Audiobookshelf / Impostazioni / Debug.
-- Evoluzione successiva: modalità Aperto con GPS ed ESP-NOW, mantenendo Chiuso utilizzabile con il solo ESP-NOW.
+- **M2c Aperto** GPS del radar, bussola e riferimenti geografici facoltativi per ID, con RSSI disponibile anche senza fix. Test host e build S3 UI Trial passati. Fix e percorso geografico da verificare al banco.
 - Non convertire RSSI in metri o direzione; ritrovamento sotto circa 30 cm deciso visivamente. Bussola serve orientamento interfaccia, non triangolazione RSSI. Fix GPS e log posizione sono opzionali in modalità Chiuso.
 - Test host gesti, stati, rendering e persistenza; test hardware in sessione autorizzata.
 
@@ -42,8 +42,8 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - Verificare sul banco IMR14500 500 mAh + protezione PCM 1S, carica, connessioni, massimi di corrente e tensione; non assumere protezioni integrate.
 - **M3a PASS funzionale via USB** impulso di avvio, comando seriale, cooldown e stabilità DRA1 sotto carico verificati. Durate elettriche, transitori di reset e tenuta della 3V3 restano da misurare. Tre WS2812B predisposti su D5 e disabilitati.
 - **M3b PASS funzionale via USB** comando manuale DRA1 da Debug. Test host, build S3/C6, installazione, 60 s DRA1 e prova supervisionata del Grove passati. Due impulsi ai tocchi accettati e nessun impulso durante il cooldown. Restano aperte le misure strumentali M3a.
-- **M3c PASS funzionale** l'operatore ha confermato il collaudo del feedback al ritrovamento. Le app S3 M3c e C6 M3b sono la baseline.
-- **M3 multisfera** sette peer autenticati, selezione, vibrazione indirizzata, ritrovamenti e Nuova partita. Simulazione con sette sfere e build S3/C6 completate. Hardware ID 1 verificato per boot, DRC1, Paired e RSSI. Prove touch con ID 1, provisioning e collaudo con più sfere ancora aperti.
+- **M3c PASS funzionale** l'operatore ha confermato il collaudo del feedback al ritrovamento. Le app S3 M3c e C6 M3b costituiscono il checkpoint storico del collaudo.
+- **M3 multisfera** sette peer autenticati, selezione, vibrazione indirizzata, ritrovamenti e Nuova partita. Simulazione con sette sfere e build S3/C6 completate. PASS funzionale con la sola sfera ID 1 confermato dall’operatore. Gli artefatti S3 multisfera e C6 M3b sono la baseline attuale. Provisioning e collaudo con più sfere restano aperti.
 - Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 

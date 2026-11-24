@@ -654,6 +654,8 @@ void buildRadarSnapshot(RadarSystemSnapshot &snap) {
   snap.gps_status = (uint8_t)g.status;
   snap.gps_i2c_online = g.i2c_reachable;
   snap.gps_fix_valid = g.fix_valid;
+  snap.gps_uart_active = g.uart_fallback_active;
+  snap.gps_ever_had_fix = g.ever_had_valid_fix;
   snap.gps_fix_quality = g.fix_quality;
   snap.gps_sats_in_use = g.satellites_in_use;
   snap.gps_sats_in_view = g.satellites_in_view;
@@ -876,6 +878,7 @@ void setup() {
   //    gpsInit() is called right after TEST 1 so TEST 1's EXIO7 reset test doesn't interrupt an active GPS session
   peripheralsInit();
   settingsInit();
+  appRadarLocationsInit();
   audiobookshelfInit();
   wifiServiceSetServerOriginHandler(audiobookshelfSetOrigin);
   displayInit(true);
@@ -933,13 +936,21 @@ void loop() {
   g_touch_pressed = displayPollTouch(g_touch_x, g_touch_y, tap);
   GestureEvent gesture = g_gestures.update(g_touch_pressed, g_touch_x, g_touch_y, millis());
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap) {
-    if (settingsGet().demo) appRadarApproach();
+    const auto mode=settingsGet().radar_mode;
+    const bool open=mode==RadarMode::Open;
+    const int16_t gameX=open ? RADAR_OPEN_GAME_X : RADAR_GAME_X;
+    const int16_t gameWidth=open ? RADAR_OPEN_ACTION_WIDTH : RADAR_GAME_WIDTH;
+    if (mode==RadarMode::Demo) appRadarApproach();
+    else if (open && gesture.x >= RADAR_GPS_X && gesture.x < RADAR_GPS_X + RADAR_OPEN_ACTION_WIDTH &&
+             gesture.y >= RADAR_GAME_Y && gesture.y < RADAR_GAME_Y + RADAR_GAME_HEIGHT) {
+      appRadarSaveSpherePosition();
+    }
     else if (gesture.y >= RADAR_SPHERE_Y && gesture.y < RADAR_SPHERE_Y + RADAR_SPHERE_HEIGHT &&
              gesture.x >= RADAR_SPHERE_X && gesture.x < RADAR_SPHERE_X + SphereSearch::count*RADAR_SPHERE_PITCH) {
       const int16_t offset=gesture.x-RADAR_SPHERE_X;
       if (offset%RADAR_SPHERE_PITCH<RADAR_SPHERE_WIDTH)
         beaconServiceSelectSphere(1+offset/RADAR_SPHERE_PITCH);
-    } else if (gesture.x >= RADAR_GAME_X && gesture.x < RADAR_GAME_X + RADAR_GAME_WIDTH &&
+    } else if (gesture.x >= gameX && gesture.x < gameX + gameWidth &&
                gesture.y >= RADAR_GAME_Y && gesture.y < RADAR_GAME_Y + RADAR_GAME_HEIGHT &&
                beaconServiceSphereGame().foundCount) {
       beaconServiceNewGame();

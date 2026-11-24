@@ -1,4 +1,4 @@
-# Dragon Radar OS — stato M1
+# Dragon Radar OS — stato di sviluppo
 
 **Branch:** `feat/espnow-m1-bidirectional` · **Baseline M1c fisica:** `0966740` · **PR #2:** draft. La [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-7102333493) ha segnalato i controlli su compatibilità DRC1/DRC2, sequenza PMK/peer e disponibilità dell'API NVS. La procedura di riferimento è [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md).
 
@@ -31,11 +31,11 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | C6 standard no_ota | 970880 | `89ec01d90823313771fe393489384f512bd295670d7f7f1630a5563e19f9b61f` |
 | C6 provisioning no_ota | 263008 | `705a737d66416b8fff38a276d79981177f50ea5f208485db3603b931044b7d64` |
 
-## Prossime azioni M3 multisfera
+## Prossime azioni M2c
 
-1. Conservare gli artefatti S3 M3c e C6 M3b come baseline funzionante.
-2. Con autorizzazione separata, provare il candidato S3 con la sfera 1 già associata. Poi aggiungere una sfera per volta tramite l'utility USB.
-3. Collaudare tutti e sette i link insieme, selezione, vibrazione indirizzata, esclusione dei ritrovamenti e Nuova partita.
+1. Dopo autorizzazione, verificare la sola app S3 M2c con la sfera 1 M3b e la configurazione radio attuale.
+2. In Aperto, acquisire un fix reale e salvare una posizione per una sfera associata. Verificare distanza, direzione, zoom e orientamento.
+3. Verificare il fallback RSSI, la conservazione della posizione dopo riavvio e la regressione di Demo e Chiuso.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -391,4 +391,19 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS avvio e compatibilità radio ID 1** inizializzati AMOLED e controller touch. DRC1 caricato, solo ID 1 associato e selezionato, conteggio 0/7 nella finestra iniziale. DRA1 Paired per 60,26 s sul canale 6, senza AP e con RSSI valido. Conferme 1 → 9 e 28 retry di probe. Zero drop, rifiuti di autenticazione, errori TX o stalli nella finestra osservata.
 - **NOT RUN collaudo fisico con più sfere** il banco usa una sola sfera. La prova RF con trasmittenti non associati e il provisioning degli ID 2–7 restano aperti. Nessuna modifica diretta alla NVS, all'antenna o al C6. Log privati.
 - **PASS osservazione senza comandi** per ulteriori 144,66 s la telemetria ha mostrato ID 1 Paired, associato e selezionato, con conteggio 0/7 e comando motore inattivo. Conferme 9 → 32 e retry 32 → 97. Nessun nuovo drop, rifiuto di autenticazione, stallo o errore di consegna osservato.
-- **PENDING operatore** nella finestra seriale non è stata rilevata alcuna transizione di gioco o del comando motore. Restano da osservare rifiuto del riquadro 2, ritmo e resa dell'interfaccia, singolo impulso alla conferma, passaggio 0/7 → 1/7, esclusione del ritrovamento e Nuova partita con ritorno a 0/7 e associazione conservata.
+- Nella finestra seriale non è stata rilevata alcuna transizione di gioco o del comando motore. Le successive verifiche della UI, del gioco e del motorino sono state confermate dall’operatore nel riepilogo seguente.
+
+### M3 multisfera — esito funzionale ID 1
+
+**PASS funzionale secondo l'operatore.** Confermate tutte e sei le prove con la sola sfera 1, inclusi comportamento delle selezioni, vibrazione al ritrovamento, conteggio, esclusione del ritrovamento e Nuova partita. Prova non ripetuta. Conservati S3 multisfera `4f78dff262259e7bf4ff1e99fdacf390cd9ba231c702a9cc83f053dede8ddcf1` e C6 ID 1 M3b `856babf41f4762ec0e2c4eb2b0b5a93624bf9e383788f7d12eacb1072cdbe425`. Il collaudo con più sfere fisiche resta aperto.
+
+## M2c — modalità Reale Aperto
+
+- **Sorgenti verificate offline.** La versione Waveshare 1.75-G ha un Quectel LC76G con antenna GNSS dedicata. Il firmware legge NMEA via I²C 0x50/0x54. UART su GPIO17/18 è un percorso diagnostico opzionale, subordinato al cablaggio e già presente. M2c riusa il fix del driver esistente e non avvia automaticamente la prova UART. Il fix sul banco M2c resta da acquisire. [Documentazione Waveshare](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75)
+- **Impostazioni → Radar** cicla Demo, Reale Chiuso e Reale Aperto. Le impostazioni precedenti migrano in lettura da `demo` e conservano la compatibilità con la build precedente. Nessuna riscrittura automatica delle impostazioni al primo avvio.
+- In **Aperto**, scegliere un ID associato e toccare **Salva GPS** nel punto in cui si nasconde la sfera. Il comando è disponibile con fix valido e fresco. Registra la posizione del radar per l'ID scelto nel namespace locale `sphere_geo`. Una posizione esistente si aggiorna con la stessa azione. Le coordinate sono facoltative, restano disponibili dopo riavvio e **Nuova partita** conserva l'ultima disposizione. La sfera non trasmette coordinate proprie.
+- La vista Aperto riusa distanze geodetiche, proiezione e zoom della Demo. Mostra i riferimenti per le sfere associate, non trovate e con posizione registrata quando il radar dispone di un fix utilizzabile. Usa la bussola calibrata con orientamento Bussola, altrimenti Nord fisso. RSSI, selezione, vibrazione e conferma touch restano disponibili, anche se il GPS non produce un fix. L'RSSI non è convertito in metri.
+- **Debug → GPS** espone trasporto disponibile, stato, usabilità del fix, età delle coordinate correnti, qualità, HDOP e satelliti disponibili. La validità per la mappa richiede coordinate finite nel dominio geografico, età massima di 10 s e codice GNSS da 1 a 5.
+- **PASS host** 13 esecuzioni, incluse prove di matematica, modalità e migrazione, salvataggio per ID con NVS simulata, mancata scrittura, proiezione, ripiego RSSI e regressioni di prossimità, DRA1, touch e standby. ASan/UBSan su Aperto, prossimità e DRA1.
+- **PASS build S3 UI Trial**, Arduino-ESP32 3.3.12. App ESP32-S3 da **1.783.456 byte**, SHA-256 `2eccebca2ac3a2ba9bab342aa15f69e4e4131f9a026e813522ab7c4f15c13651`. Checksum e hash interni validi. La tabella generata coincide con l’ultima tabella del radar archiviata e l’app rientra in OTA1 a `0x310000` (3 MiB). Binario e log conservati localmente.
+- **NOT RUN fisico** nessun flash. Il retry elevato dei probe resta in osservazione. Il banco ID 1 precedente ha registrato 28 retry nella prima finestra da 60 s a fronte di zero drop o rifiuti. Nessuna modifica al percorso radio, ai dispositivi C6 o agli attuatori.

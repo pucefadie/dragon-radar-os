@@ -1495,21 +1495,35 @@ void displayRenderRadarApp(const RadarView &v) {
                   233+(int16_t)(dx*187)+ox,233+(int16_t)(dy*187)+oy,trailColors[i]);
     }
   }
-  d->fillTriangle(233+rx(0,-22),233+ry(0,-22),233+rx(-15,13),233+ry(-15,13),233+rx(15,13),233+ry(15,13),RADAR_COLOR_RED);
-  if ((millis() / 450) % 2 == 0) for (unsigned i=0; i<v.count; ++i) {
-    int x=233+rx(v.balls[i].x,v.balls[i].y), y=233+ry(v.balls[i].x,v.balls[i].y);
-    if (v.balls[i].offscreen) d->drawCircle(x,y,5,RADAR_COLOR_YELLOW);
-    else { d->fillCircle(x,y,7,RADAR_COLOR_YELLOW); d->drawCircle(x,y,10,RADAR_COLOR_AMBER); }
+  if (v.open) d->fillTriangle(233,211,218,246,248,246,RADAR_COLOR_RED);
+  else d->fillTriangle(233+rx(0,-22),233+ry(0,-22),233+rx(-15,13),233+ry(-15,13),233+rx(15,13),233+ry(15,13),RADAR_COLOR_RED);
+  const auto game=beaconServiceSphereGame();
+  if (v.open || (millis() / 450) % 2 == 0) for (unsigned i=0; i<v.count; ++i) {
+    const auto &ball=v.balls[i];
+    const int x=233+(v.open ? ball.x : rx(ball.x,ball.y)), y=233+(v.open ? ball.y : ry(ball.x,ball.y));
+    const uint16_t color=v.open && ball.id!=game.selected ? RADAR_COLOR_WHITE : RADAR_COLOR_YELLOW;
+    if (ball.offscreen) d->drawCircle(x,y,5,color);
+    else { d->fillCircle(x,y,7,color); d->drawCircle(x,y,10,RADAR_COLOR_AMBER); }
+    if (v.open) {
+      d->setTextSize(1);
+      d->setTextColor(color);
+      d->setCursor(x+9,y-5);
+      d->print(unsigned(ball.id));
+    }
   }
   char text[48];
   if (v.demo) snprintf(text,sizeof(text),"DEMO  %um",v.range_m);
-  const auto game=beaconServiceSphereGame();
   if (!v.demo) {
     if (game.selected) snprintf(text,sizeof(text),"SFERA %u  TROVATE %u/7",unsigned(game.selected),unsigned(game.foundCount));
     else snprintf(text,sizeof(text),"TROVATE %u/7",unsigned(game.foundCount));
   }
   drawCenteredText(d, 62, text, RADAR_COLOR_BG, 2);
-  snprintf(text,sizeof(text),"%s %03.0f %s",v.heading_up?"HEAD":"NORD",v.heading,v.compass_calibrated?"CAL":"RAW");
+  if (v.open) {
+    if (v.heading_up) snprintf(text,sizeof(text),"APERTO  %03.0f  ZOOM %um",v.heading,v.range_m);
+    else snprintf(text,sizeof(text),"APERTO  NORD FISSO  ZOOM %um",v.range_m);
+  } else {
+    snprintf(text,sizeof(text),"%s %03.0f %s",v.heading_up?"HEAD":"NORD",v.heading,v.compass_calibrated?"CAL":"RAW");
+  }
   drawCenteredText(d, 88, text, RADAR_COLOR_BG, 1);
   if (!v.compass_online) drawCenteredText(d, 108, "BUSSOLA OFFLINE", RADAR_COLOR_RED, 1);
   else if (v.heading_held) drawCenteredText(d, 108, "BUSSOLA PAUSA MOTORE", RADAR_COLOR_YELLOW, 1);
@@ -1547,6 +1561,19 @@ void displayRenderRadarApp(const RadarView &v) {
       for (int j = 0; j < 2*steps; ++j)
         d->drawCircle(233,233,radius+j,RADAR_COLOR_YELLOW);
     }
+    if (v.open) {
+      const char *gpsText=nullptr;
+      if (v.gps_save==GpsSaveStatus::Saved) gpsText="POSIZIONE SALVATA";
+      else if (v.gps_save==GpsSaveStatus::Failed) gpsText="SALVATAGGIO GPS FALLITO";
+      else if (!v.gps_valid) gpsText="GPS SENZA FIX  |  RSSI";
+      else if (!v.selected_position) gpsText="POSIZIONE GPS ASSENTE  |  RSSI";
+      else if (v.gps_distance_m>=1.0)
+        snprintf(text,sizeof(text),"GPS %.0f m  %03u gradi",v.gps_distance_m,
+                 unsigned(lround(v.gps_bearing_deg))%360);
+      else if (v.gps_distance_m>=0.0) gpsText="GPS MENO DI 1 m";
+      else gpsText="POSIZIONE GPS SALVATA";
+      drawCenteredText(d,278,gpsText?gpsText:text,RADAR_COLOR_WHITE,1);
+    }
     const char *proximityText=game.foundCount==SphereSearch::count ? "TUTTE LE SFERE TROVATE" :
                               game.selected ? proximityLabel(signal,link) : "NESSUNA SFERA ASSOCIATA";
     drawCenteredText(d, 308, proximityText, RADAR_COLOR_YELLOW, 2);
@@ -1555,7 +1582,19 @@ void displayRenderRadarApp(const RadarView &v) {
       d->fillRoundRect(RADAR_FOUND_X,RADAR_FOUND_Y,RADAR_FOUND_WIDTH,RADAR_FOUND_HEIGHT,8,RADAR_COLOR_BG);
       drawCenteredText(d, 367,"CONFERMA RITROVAMENTO",RADAR_COLOR_WHITE,2);
     }
-    if (game.foundCount) {
+    if (v.open) {
+      d->fillRoundRect(RADAR_GPS_X,RADAR_GAME_Y,RADAR_OPEN_ACTION_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
+      d->setTextSize(1);
+      d->setTextColor(v.gps_can_save ? RADAR_COLOR_WHITE : RADAR_COLOR_GRAY);
+      d->setCursor(RADAR_GPS_X+35,405);
+      d->print("SALVA GPS");
+      if (game.foundCount) {
+        d->fillRoundRect(RADAR_OPEN_GAME_X,RADAR_GAME_Y,RADAR_OPEN_ACTION_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
+        d->setTextColor(RADAR_COLOR_WHITE);
+        d->setCursor(RADAR_OPEN_GAME_X+23,405);
+        d->print("NUOVA PARTITA");
+      }
+    } else if (game.foundCount) {
       d->fillRoundRect(RADAR_GAME_X,RADAR_GAME_Y,RADAR_GAME_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
       drawCenteredText(d, 404,"NUOVA PARTITA",RADAR_COLOR_WHITE,2);
     }
@@ -1579,7 +1618,13 @@ void displayRenderSettings(uint8_t selection, const RadarSystemSnapshot &snap) {
     case 0: title="LUMINOSITA"; snprintf(value,sizeof(value),"%u / 255",s.brightness); break;
     case 1: title="VOLUME"; snprintf(value,sizeof(value),"%u %%",s.volume); break;
     case 2: title="VIBRAZIONE"; snprintf(value,sizeof(value),"%s",s.vibration?"ON":"OFF"); break;
-    case 3: title="RADAR"; snprintf(value,sizeof(value),"%s",s.demo?"DEMO":"REALE"); break;
+    case 3:
+      title="RADAR";
+      snprintf(value,sizeof(value),"%s",s.radar_mode==RadarMode::Demo ? "DEMO" :
+               s.radar_mode==RadarMode::Closed ? "REALE CHIUSO" : "REALE APERTO");
+      if (s.radar_mode==RadarMode::Open) snprintf(detail1,sizeof(detail1),"GPS + ESP-NOW");
+      else if (s.radar_mode==RadarMode::Closed) snprintf(detail1,sizeof(detail1),"ESP-NOW / RSSI");
+      break;
     case 4: title="ORIENTAMENTO"; snprintf(value,sizeof(value),"%s",s.heading_up?"BUSSOLA":"NORD FISSO"); break;
     case 5: title="CALIBRAZIONE"; snprintf(value,sizeof(value),"%s",magCalIsInProgress()?"STOP / SALVA":"AVVIA"); break;
     case 6:
@@ -1667,7 +1712,22 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
     case 1: title="BUSSOLA"; snprintf(a,sizeof(a),"HEADING %.0f",snap.heading_deg); snprintf(b,sizeof(b),"CAMPO %.1f uT",snap.mag_b_ut); snprintf(c,sizeof(c),"%s %s",snap.mag_calibrated?"CAL":"RAW",(snap.mag_b_ut>=15 && snap.mag_b_ut<=120)?"":"FUORI RANGE"); break;
     case 2: { title="MAG RAW"; const auto &m=sensorsGetStatus().bmm; snprintf(a,sizeof(a),"X %.1f uT",m.raw_x_ut); snprintf(b,sizeof(b),"Y %.1f uT",m.raw_y_ut); snprintf(c,sizeof(c),"Z %.1f uT",m.raw_z_ut); snprintf(e,sizeof(e),"CAMPO %.1f uT",m.raw_b_norm_ut); break; }
     case 3: title="INCLINAZIONE"; snprintf(a,sizeof(a),"ROLL %.1f",snap.roll_deg); snprintf(b,sizeof(b),"PITCH %.1f",snap.pitch_deg); snprintf(c,sizeof(c),"ACC Z %.2f g",snap.acc_z_g); break;
-    case 4: title="GPS"; snprintf(a,sizeof(a),"%s",snap.gps_fix_valid?"FIX VALIDO":"NESSUN FIX"); snprintf(b,sizeof(b),"SAT %u / %u",snap.gps_sats_in_use,snap.gps_sats_in_view); snprintf(c,sizeof(c),"NMEA %lu",(unsigned long)snap.gps_nmea_valid); break;
+    case 4: {
+      title="GPS";
+      const bool usable=radarUsableFix(appRadarFix(snap));
+      const char *source=snap.gps_uart_active ? (snap.gps_i2c_online ? "I2C+UART" : "UART") :
+                          snap.gps_i2c_online ? "I2C" : "--";
+      snprintf(a,sizeof(a),"%s  %s",source,
+               snap.gps_status==RADAR_GPS_VALID_FIX ? "FIX" : resolveGpsStatusShort(snap.gps_status));
+      snprintf(b,sizeof(b),"%s",usable ? "FIX VALIDO" : "FIX NON UTILIZZABILE");
+      if (snap.gps_ever_had_fix) snprintf(c,sizeof(c),"ETA FIX %.1f s",double(snap.gps_fix_age_ms)/1000.0);
+      else snprintf(c,sizeof(c),"ETA FIX --");
+      if (isfinite(snap.gps_hdop) && snap.gps_hdop>0 && snap.gps_hdop<99.9f)
+        snprintf(e,sizeof(e),"QUAL %u  HDOP %.1f",unsigned(snap.gps_fix_quality),double(snap.gps_hdop));
+      else snprintf(e,sizeof(e),"QUAL %u  HDOP --",unsigned(snap.gps_fix_quality));
+      snprintf(detail,sizeof(detail),"SAT %u / %u",unsigned(snap.gps_sats_in_use),unsigned(snap.gps_sats_in_view));
+      break;
+    }
     case 5: title="BATTERIA"; if(snap.battery_present && snap.batt_percent>=0) snprintf(a,sizeof(a),"%d %%",snap.batt_percent); else snprintf(a,sizeof(a),"NON RILEVATA"); snprintf(b,sizeof(b),"%u mV",snap.batt_mv); snprintf(c,sizeof(c),"%s",snap.is_charging?"IN CARICA":"NON IN CARICA"); break;
     case 6: title="RTC"; snprintf(a,sizeof(a),"%s",snap.rtc_online?"ONLINE":"OFFLINE"); snprintf(b,sizeof(b),"%.19s",snap.rtc_datetime); break;
     case 7: title="BUS I2C"; snprintf(a,sizeof(a),"DISPOSITIVI %u",snap.i2c_found_count); snprintf(b,sizeof(b),"ERRORI %lu",(unsigned long)snap.i2c_err_count); snprintf(c,sizeof(c),"BMM 0x%02X",snap.bmm_addr); break;

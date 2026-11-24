@@ -19,3 +19,15 @@ RadarProjection radarProject(double distance, double bearing, double up, double 
   double r = distance / range * radius; bool off = r > radius; if (off) r = radius;
   double angle = radians(radarWrapDegrees(bearing-up)); return {r*sin(angle), -r*cos(angle), off};
 }
+
+bool radarValidPosition(RadarPosition position) {
+  return isfinite(position.latitude) && isfinite(position.longitude) &&
+         fabs(position.latitude)<=90.0 && fabs(position.longitude)<=180.0 &&
+         (position.latitude!=0.0 || position.longitude!=0.0);
+}
+
+bool radarUsableFix(const RadarFix &fix) {
+  // Fresh, receiver-supplied GNSS fixes only (exclude estimated, manual and simulated quality codes).
+  return fix.valid && fix.age_ms<=10000 && fix.quality>=1 && fix.quality<=5 &&
+         radarValidPosition(fix.position);
+}

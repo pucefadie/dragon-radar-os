@@ -19,7 +19,7 @@ void appSettingsActivate() {
     case 0: s.brightness = s.brightness >= 225 ? 50 : s.brightness + 35; displaySetBrightness(s.brightness); break;
     case 1: s.volume = (s.volume + 25) % 125; break;
     case 2: s.vibration = !s.vibration; if (!s.vibration) motorStop(); break;
-    case 3: s.demo = !s.demo; break;
+    case 3: s.radar_mode = nextRadarMode(s.radar_mode); break;
     case 4: s.heading_up = !s.heading_up; break;
     case 5: if (magCalIsInProgress()) magCalStop(true); else magCalStart(); return;
     case 6: wifiServiceBeginPortal(); return;
