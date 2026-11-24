@@ -31,11 +31,9 @@ I file sono locali e non programmati. Le immagini S3 standard/provisioning M1b n
 | C6 standard no_ota | 970880 | `89ec01d90823313771fe393489384f512bd295670d7f7f1630a5563e19f9b61f` |
 | C6 provisioning no_ota | 263008 | `705a737d66416b8fff38a276d79981177f50ea5f208485db3603b931044b7d64` |
 
-## Prossime azioni M3b
+## Stato del collaudo M3b
 
-1. Ottenere autorizzazione al collaudo e acquisire backup live per entrambi i dispositivi, con Grove e batteria scollegati durante il preflight.
-2. Programmare e verificare le sole app S3 OTA1 e C6 app0 dopo i controlli di identità, layout e compatibilità.
-3. Con l'operatore presente e la sfera alimentata solo via USB, provare il tasto Debug e verificare conferma, impulso singolo, rifiuto in cooldown e stabilità DRA1.
+Il collaudo funzionale USB è completato. Restano aperte le misure M3a di durata degli impulsi, transitori D4 al reset e in ROM e tenuta della 3V3.
 
 [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) · [SECURITY_PLAN.md](SECURITY_PLAN.md). **M1 resta aperta** e la PR resta draft.
 
@@ -340,3 +338,10 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS avvio motorino osservato** l'operatore ha confermato un impulso breve dopo il ricollegamento del Grove e l'alimentazione solo USB.
 - **PASS stabilità dopo il ricollegamento** 120 s di monitoraggio seriale senza reset inattesi nella finestra, DRA1 Paired e conferme S3 30 → 69, C6 2 → 40. I contatori di retry ed errori di consegna già presenti al primo campione, dopo la riaccensione del C6, non sono cresciuti.
 - **NOT RUN** prova del pulsante, esito del comando, cooldown e impulso successivo. Lo stato applicativo è rimasto inattivo durante la finestra. Il prossimo campione richiede i tocchi dell'operatore nella pagina 13/13 di Debug. Restano aperte le verifiche strumentali M3a.
+
+### M3b — collaudo touch e conferme applicative
+
+- **PASS via seriale** sulle due schede, senza flash o reset. Dal tasto **Debug 13/13 → Fai vibrare la sfera**, esiti applicativi DRA1 in sequenza accettato → cooldown → accettato. Il rifiuto è stato campionato 1,70 s dopo la prima conferma e la nuova accettazione 4,72 s dopo la prima.
+- **PASS radio durante il comando** Paired sul canale 6 in tutta la finestra, almeno 10 s di monitoraggio dopo l'ultima conferma. Conferme S3 141 → 149 e C6 187 → 194. Nessun nuovo drop RX, errore di consegna, rifiuto di autenticazione, retry dei probe, duplicato o stallo TX. Nessun reset osservato.
+- **PASS fisico riferito dall'operatore** primo e terzo tocco hanno prodotto un impulso ciascuno. Al secondo tocco il motore è rimasto fermo e il display ha mostrato l'invito a riprovare. Le due accettazioni sono verificate via seriale. Il testo positivo sul pannello non è stato confermato esplicitamente dall'operatore.
+- **M3b PASS funzionale via USB** deduplicazione del comando con risposta persa verificata nei test host. Le misure strumentali M3a restano aperte. Log privati.
