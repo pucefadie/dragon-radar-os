@@ -34,7 +34,7 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - **M2b Chiuso** RSSI degli ACK DRA1 autenticati, filtro con isteresi, conferma manuale del ritrovamento e diagnostica della freschezza. Test software e collaudo fisico qualitativo passati.
 - **M2b.1 scala RSSI** 15 livelli grafici su tre anelli, con più risoluzione a segnale forte. Isteresi grafica separata da qualità RSSI e stato DRA1. Test host e build S3 UI Trial passati. Confronto sul campo con M2b ancora da eseguire con la configurazione radio già collaudata.
 - UI e launcher bottom-up con modalità Radar / Audiobookshelf / Impostazioni / Debug.
-- **M2c Aperto** GPS del radar, bussola e riferimenti geografici facoltativi per ID, con RSSI disponibile anche senza fix. Test host e build S3 UI Trial passati. Fix e percorso geografico da verificare al banco.
+- **M2c Aperto** GPS del radar, bussola e riferimenti geografici facoltativi per ID, con RSSI disponibile anche senza fix. Test host e build S3 UI Trial passati. Candidato e identità USB verificati. Preflight live da completare dopo conferma dell’isolamento degli attuatori. Prova geografica reale rinviata.
 - Non convertire RSSI in metri o direzione; ritrovamento sotto circa 30 cm deciso visivamente. Bussola serve orientamento interfaccia, non triangolazione RSSI. Fix GPS e log posizione sono opzionali in modalità Chiuso.
 - Test host gesti, stati, rendering e persistenza; test hardware in sessione autorizzata.
 

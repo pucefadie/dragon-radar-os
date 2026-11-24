@@ -407,3 +407,11 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS host** 13 esecuzioni, incluse prove di matematica, modalità e migrazione, salvataggio per ID con NVS simulata, mancata scrittura, proiezione, ripiego RSSI e regressioni di prossimità, DRA1, touch e standby. ASan/UBSan su Aperto, prossimità e DRA1.
 - **PASS build S3 UI Trial**, Arduino-ESP32 3.3.12. App ESP32-S3 da **1.783.456 byte**, SHA-256 `2eccebca2ac3a2ba9bab342aa15f69e4e4131f9a026e813522ab7c4f15c13651`. Checksum e hash interni validi. La tabella generata coincide con l’ultima tabella del radar archiviata e l’app rientra in OTA1 a `0x310000` (3 MiB). Binario e log conservati localmente.
 - **NOT RUN fisico** nessun flash. Il retry elevato dei probe resta in osservazione. Il banco ID 1 precedente ha registrato 28 retry nella prima finestra da 60 s a fronte di zero drop o rifiuti. Nessuna modifica al percorso radio, ai dispositivi C6 o agli attuatori.
+
+
+### M2c — preflight prima dell’installazione
+
+- **PASS candidato autorizzato `b71a440`** confermati target ESP32-S3, 1.783.456 byte, SHA-256 indicato sopra, checksum e hash interni. Riconfermati i due backup originali da 16 MiB, identici, e gli hash del checkpoint S3 multisfera.
+- **PASS controlli USB in lettura** identità S3 riconosciuta su COM11 e app precedente rispondente. Il PMIC segnala batteria scollegata e la diagnostica non riporta un avviso sullo stato inattivo del motorino. AMOLED e controller touch inizializzati. DRA1 con ID 1 Paired sul canale 6, senza AP. Queste osservazioni riguardano l’app precedente.
+- **IN ATTESA del banco** occorre confermare che gli attuatori S3 siano fisicamente isolati. Lo stato inattivo del pin non attesta che il carico sia isolato. Il firmware precedente resta in esecuzione. Nessun reset o scrittura sul radar. C6 M3b invariato.
+- **NOT RUN** letture correnti in ROM, installazione OTA1, readback e collaudo di M2c. Dopo la conferma del banco, acquisire due copie correnti di intestazione e OTA1, verificare OTA0 e selezione OTA, quindi programmare la sola app già autorizzata e confrontare prima dell’avvio. Il collaudo geografico reale resta rinviato.
