@@ -19,6 +19,7 @@
 #include "beacon_service.h"
 #include "sd_service.h"
 #include "ota_service.h"
+#include <nvs_flash.h>
 #include "audio_service.h"
 #include "audio_codec_probe.h"
 #include "audiobookshelf_client.h"
@@ -853,6 +854,7 @@ void handleSerialCommand(String cmd) {
 void setup() {
   // 1. CRITICAL HARDWARE SAFETY: Force GPIO16 (Motor) LOW as very first instruction
   motorSafePreInit();
+  otaServiceBeginBoot();
 
   // 2. Disable Wi-Fi and Bluetooth for clean power/EMI baseline
   WiFi.mode(WIFI_OFF);
@@ -949,8 +951,24 @@ const DebugSphereOta &debugSphereOta() { return otaPage; }
 bool debugSphereOtaTap(const GestureEvent &event) {
   if (event.type!=Gesture::Tap || event.x<82 || event.x>=384) return false;
   auto &s=otaPage.state;
+  if (event.y>=121 && event.y<156 && !otaServiceActive()) {
+    otaPage.radar=event.x<233;
+    otaPage.radarConfirm=false;
+    if (s==SphereOtaUi::Confirm) s=SphereOtaUi::Idle;
+    return true;
+  }
+  if (otaPage.radar) {
+    if (event.y<348 || event.y>=392) return false;
+    if (otaServiceActive()) otaServiceStop();
+    else if (!otaPage.radarConfirm) otaPage.radarConfirm=true;
+    else {
+      otaPage.radarConfirm=false;
+      if (event.x<233) otaServiceStart();
+    }
+    return true;
+  }
   if (s==SphereOtaUi::Arming || s==SphereOtaUi::Starting || s==SphereOtaUi::Query) return true;
-  if (event.y>=148 && event.y<190) {
+  if (event.y>=158 && event.y<190) {
     otaPage.id=1+(otaPage.id-1+(event.x<233?6:1))%7;
     s=SphereOtaUi::Idle;
   } else if (event.y>=240 && event.y<285) {
@@ -985,9 +1003,13 @@ void loop() {
   // 1. Non-blocking periodic updates of all modules
   peripheralsUpdate();
   settingsUpdate();
-  wifiServiceUpdate();
+  otaServiceUpdate();
+  if (!otaServiceActive()) wifiServiceUpdate();
   audiobookshelfUpdate();
   beaconServiceUpdate();
+  if (otaServiceBootPending())
+    otaServiceFinishBoot(nvs_flash_init() == ESP_OK && displayIsInitialized() &&
+                         displayIsTouchOnline() && beaconServiceReady());
   const ButtonStatus &powerButton = buttonGetStatus();
   if (g_standby) {
     const bool shortPress = buttonConsumeShortPress();
@@ -1007,7 +1029,7 @@ void loop() {
   sensorsUpdate();
   gpsUpdate();
 
-  if (otaServiceUpdating()) motorStop();
+  if (otaServiceActive()) motorStop();
   static uint32_t mag_stream_last = 0;
   if (g_mag_stream && millis() - mag_stream_last >= 500) {
     mag_stream_last = millis();
@@ -1062,7 +1084,9 @@ void loop() {
   const bool sphereOtaPage=!g_debugLegacy && !g_apps.launcherOpen() &&
       g_apps.active()==AppId::Debug && g_apps.debugPage()==DEBUG_SPHERE_OTA_PAGE;
   debugSphereOtaUpdate();
-  if ((sphereOtaPage && debugSphereOtaTap(gesture)) ||
+  if (otaServiceActive()) {
+    if (sphereOtaPage) debugSphereOtaTap(gesture);
+  } else if ((sphereOtaPage && debugSphereOtaTap(gesture)) ||
       (sphereRgbPage && debugSphereRgbTap(gesture))) {}
   else if (sphereMotorPage && debugSphereMotorTap(gesture)) beaconServiceRequestSphereMotor();
   else {
@@ -1070,8 +1094,8 @@ void loop() {
         gesture.type == Gesture::Hold) motorTriggerShortPulse();
     g_apps.gesture(gesture);
   }
-  if (buttonConsumeShortPress()) { if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar) appRadarZoom(); else if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings) appSettingsNext(); else g_apps.shortPress(); }
-  if (buttonConsumeLongPress()) g_apps.longPress();
+  if (buttonConsumeShortPress() && !otaServiceActive()) { if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar) appRadarZoom(); else if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings) appSettingsNext(); else g_apps.shortPress(); }
+  if (buttonConsumeLongPress() && !otaServiceActive()) g_apps.longPress();
   if (appSettingsConsumeStandby() && !otaServiceActive()) {
     motorStop();
     displaySetBrightness(0);
@@ -1080,7 +1104,7 @@ void loop() {
     beaconServiceSetProximitySuspended(true);
     return;
   }
-  if (appSettingsConsumeRestart() && !otaServiceUpdating()) ESP.restart();
+  if (appSettingsConsumeRestart() && !otaServiceActive()) ESP.restart();
 
   // Refresh TCA9554 register snapshot every 500 ms
   static uint32_t last_tca_ms = 0;
@@ -1099,7 +1123,7 @@ void loop() {
     else if (g_apps.active() == AppId::Radar) {
       RadarView view = appRadarUpdate(snap);
       static uint32_t lastBeepCycle = 0;
-      if (!otaServiceUpdating()) {
+      if (!otaServiceActive()) {
         appRadarHaptic(view, millis());
         const uint32_t beepCycle = millis() / RADAR_SCAN_PERIOD_MS;
         if (view.count && settingsGet().sound && settingsGet().volume && beepCycle != lastBeepCycle) {

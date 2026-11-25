@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <esp_partition.h>
 #include <nvs_flash.h>
+#include "ota_service.h"
 
 extern "C" void __real_initArduino();
 extern "C" esp_err_t __real_esp_partition_erase_range(const esp_partition_t *, size_t, size_t);
@@ -16,6 +17,7 @@ extern "C" esp_err_t __wrap_esp_partition_erase_range(const esp_partition_t *par
 }
 
 extern "C" void __wrap_initArduino() {
+  otaServiceBeginBoot();
   const esp_err_t result = nvs_flash_init();
   if (result == ESP_OK) {
     __real_initArduino();

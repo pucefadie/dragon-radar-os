@@ -98,6 +98,13 @@ void beaconServiceInit() {
   static DevRadar radar(devAdapter,esp_random()|1); devRadar=&radar; Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
 #endif
 }
+bool beaconServiceReady() {
+#if !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  return ready && secureReady;
+#else
+  return false;
+#endif
+}
 void beaconServiceUpdate() {
   wifi_mode_t currentMode; if (esp_wifi_get_mode(&currentMode)==ESP_OK && modeKnown && currentMode!=lastMode) { ++modeChanges; lastMode=currentMode; }
   static uint32_t lastRetry=0;

@@ -1644,10 +1644,7 @@ void displayRenderSettings(uint8_t selection, const RadarSystemSnapshot &snap) {
     case 9:
       title="AGGIORNA OTA";
       snprintf(value,sizeof(value),"%s",otaServiceStatus());
-      if (otaServiceActive() && !otaServiceUpdating()) {
-        snprintf(detail1,sizeof(detail1),"KEY: %s",otaServicePassword());
-        snprintf(detail2,sizeof(detail2),"IP: %s",WiFi.localIP().toString().c_str());
-      } else if (!otaServiceActive()) snprintf(detail1,sizeof(detail1),"SERVE WI-FI");
+      snprintf(detail1,sizeof(detail1),"DEBUG > AGGIORNAMENTI OTA");
       break;
     case 12: title="POWER OFF"; snprintf(value,sizeof(value),"STANDBY"); snprintf(detail1,sizeof(detail1),"%s",otaServiceActive()?"OTA ATTIVO":"TASTO: ACCENDI"); break;
     case 13: title="RIAVVIO"; snprintf(value,sizeof(value),"%s",appSettingsRestartConfirm()?"CONFERMA?":"RIAVVIA"); break;
@@ -1681,11 +1678,42 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
   if (page==DEBUG_SPHERE_OTA_PAGE) {
     const auto &ota=debugSphereOta();
     const auto version=beaconServiceSphereVersion(ota.id);
-    drawCenteredText(d,112,"AGGIORNAMENTI OTA",RADAR_COLOR_GRID_BRIGHT,2);
+    drawCenteredText(d,90,"AGGIORNAMENTI OTA",RADAR_COLOR_GRID_BRIGHT,2);
+    d->fillRoundRect(82,121,302,35,8,RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,130,ota.radar ? "[RADAR]      SFERA" : "RADAR      [SFERA]",RADAR_COLOR_WHITE,2);
+    if (ota.radar) {
+      const auto state=otaServiceState();
+      snprintf(a,sizeof(a),"DragonRadar  v%lu",(unsigned long)otaServiceVersion());
+      drawCenteredText(d,173,a,RADAR_COLOR_WHITE,2);
+      drawCenteredText(d,203,otaServiceStatus(),RADAR_COLOR_GRID_BRIGHT,2);
+      if (state==RadarOtaState::Ready) {
+        snprintf(a,sizeof(a),"WI-FI  %s",otaServicePassword());
+        drawCenteredText(d,229,a,RADAR_COLOR_WHITE,2);
+        drawCenteredText(d,257,"CHIAVE MANIFEST",RADAR_COLOR_WHITE,2);
+        snprintf(a,sizeof(a),"%.16s",otaServiceManifestKey());
+        drawCenteredText(d,280,a,RADAR_COLOR_WHITE,2);
+        if (strlen(otaServiceManifestKey())==32)
+          drawCenteredText(d,301,otaServiceManifestKey()+16,RADAR_COLOR_WHITE,2);
+        drawCenteredText(d,326,"192.168.4.1",RADAR_COLOR_WHITE,2);
+      } else if (state==RadarOtaState::Receiving || state==RadarOtaState::Committing || state==RadarOtaState::Rebooting) {
+        const unsigned percent=otaServiceProgress();
+        snprintf(a,sizeof(a),"%u%%",percent);
+        drawCenteredText(d,240,a,RADAR_COLOR_WHITE,3);
+        d->drawRect(106,280,254,20,RADAR_COLOR_GRID_BRIGHT);
+        d->fillRect(108,282,250*percent/100,16,RADAR_COLOR_GRID_BRIGHT);
+      }
+      if (state!=RadarOtaState::Committing && state!=RadarOtaState::Rebooting) {
+        d->fillRoundRect(82,348,302,44,8,RADAR_COLOR_GRID_DARK);
+        drawCenteredText(d,362,otaServiceActive() ? "ANNULLA OTA" :
+            ota.radarConfirm ? "CONFERMA     ANNULLA" : "ATTIVA OTA",RADAR_COLOR_WHITE,2);
+      }
+      flushDisplay();
+      return;
+    }
     snprintf(a,sizeof(a),"<       SFERA %u       >",unsigned(ota.id));
-    drawCenteredText(d,159,a,RADAR_COLOR_WHITE,2);
+    drawCenteredText(d,166,a,RADAR_COLOR_WHITE,2);
     snprintf(a,sizeof(a),"SSID DragonBall-%02u",unsigned(ota.id));
-    drawCenteredText(d,188,a,RADAR_COLOR_WHITE,2);
+    drawCenteredText(d,191,a,RADAR_COLOR_WHITE,2);
     drawCenteredText(d,211,secureLinkLabel(beaconServiceLinkForId(ota.id)),RADAR_COLOR_WHITE,2);
     d->fillRoundRect(82,240,302,45,8,RADAR_COLOR_GRID_DARK);
     drawCenteredText(d,252,ota.state==SphereOtaUi::Confirm ? "CONFERMA      ANNULLA" : "ATTIVA OTA",RADAR_COLOR_WHITE,2);

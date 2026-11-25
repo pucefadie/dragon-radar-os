@@ -6,7 +6,11 @@ constexpr uint8_t DEBUG_SPHERE_RGB_PAGE = DEBUG_SPHERE_MOTOR_PAGE+1;
 constexpr uint8_t DEBUG_SPHERE_OTA_PAGE=DEBUG_SPHERE_RGB_PAGE+1;
 constexpr uint8_t DEBUG_PAGE_COUNT=DEBUG_SPHERE_OTA_PAGE+1;
 enum class SphereOtaUi : uint8_t { Idle, Confirm, Query, Arming, Starting, Ack, Unknown, Refused };
-struct DebugSphereOta { uint8_t id=1; SphereOtaUi state=SphereOtaUi::Idle; };
+struct DebugSphereOta {
+  uint8_t id=1;
+  SphereOtaUi state=SphereOtaUi::Idle;
+  bool radar=false, radarConfirm=false;
+};
 const DebugSphereOta &debugSphereOta();
 bool debugSphereOtaTap(const GestureEvent &event);
 void debugSphereOtaUpdate();

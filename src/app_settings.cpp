@@ -25,7 +25,7 @@ void appSettingsActivate() {
     case 6: wifiServiceBeginPortal(); return;
     case 7: s.mount_offset = s.mount_offset >= 165 ? -180 : s.mount_offset + 15; break;
     case 8: s.declination = s.declination >= 30 ? -30 : s.declination + 1; break;
-    case 9: if (otaServiceActive()) otaServiceStop(); else otaServiceStart(); return;
+    case 9: return;
     case 11: s.sound = !s.sound; break;
     case 12: if (!otaServiceActive()) standbyRequested = true; return;
     case 13: if (!restartConfirm) { restartConfirm = true; return; } restartConfirm = false; restartRequested = true; return;

@@ -4,6 +4,7 @@
 #include "proximity_engine.h"
 void beaconServiceInit();
 void beaconServiceUpdate();
+bool beaconServiceReady();
 void beaconServicePrint(Stream &out);
 uint8_t beaconServiceFreshCount();
 uint8_t beaconServiceChannel();

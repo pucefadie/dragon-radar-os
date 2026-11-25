@@ -55,3 +55,9 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 
 ## Checkpoint per Codex
 Per ciascun commit significativo: aggiornare `STATUS.md` con versione/branch, evidenza test, limitazioni e prima azione successiva. Mai cancellare le verifiche già riportate; distinguere evidenze storiche, attuali e da ripetere.
+
+## M3f — OTA radar ESP32-S3
+
+- **Software** selettore Radar/Sfera in Debug, AP DragonRadar su conferma locale, manifest HMAC di sessione, upload da PC, avanzamento, annullamento e validazione al boot.
+- **Migrazione** OTA0 originale protetta per impostazione iniziale. Il passaggio a due slot operativi richiede una migrazione USB separata, con backup full-slot e recupero ROM verificati offline. Il firmware delle sfere resta invariato.
+- **Collaudo aperto** avvio M3f in OTA1 con OTA0 protetta, poi sessioni autorizzate per AP, aggiornamento nei due sensi, rollback fisico e confronto delle associazioni e impostazioni. [Procedura OTA radar](RADAR_OTA.md)
