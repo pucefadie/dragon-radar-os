@@ -36,7 +36,7 @@ if [[ "$white" != 0 && "$white" != 1 ]]; then
 fi
 wrap="-Wl,--wrap=initArduino"
 ota=0
-version="${SPHERE_OTA_VERSION:-311}"
+version="${SPHERE_OTA_VERSION:-331}"
 if [[ "$role" == ota ]]; then
   [[ "$version" =~ ^[1-9][0-9]{0,7}$ ]] && (( version <= 16777215 ))
   ota=1

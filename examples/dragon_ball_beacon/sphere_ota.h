@@ -8,7 +8,7 @@
 #include <mbedtls/sha256.h>
 
 #ifndef SPHERE_OTA_VERSION
-#define SPHERE_OTA_VERSION 311
+#define SPHERE_OTA_VERSION 331
 #endif
 #define SPHERE_TEXT_(s) #s
 #define SPHERE_TEXT(s) SPHERE_TEXT_(s)

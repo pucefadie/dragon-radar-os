@@ -35,6 +35,7 @@ std::atomic<uint32_t> firstMutation{0};
 std::atomic<uintptr_t> firstCaller{0};
 std::atomic<unsigned> nvsPhase{0};
 
+esp_err_t flashReadCheck=ESP_ERR_INVALID_STATE;
 esp_err_t initResult=ESP_ERR_INVALID_STATE, openResult=ESP_ERR_INVALID_STATE;
 esp_err_t keyResult=ESP_ERR_INVALID_STATE, readResult=ESP_ERR_INVALID_STATE;
 bool recordValid=false;
@@ -78,9 +79,34 @@ static SecureRecordRead earlyRead(void *storage,const char *key,uint8_t *bytes,s
   return readResult==ESP_OK ? SecureRecordRead::Loaded : SecureRecordRead::Error;
 }
 
+#if !SPHERE_OTA_NVS_TRACE
+// A mismatched loader can return successful raw reads with wrong contents.
+static esp_err_t verifyFlashReadPath(const esp_partition_t *partition) {
+  const void *mapped=nullptr;
+  esp_partition_mmap_handle_t handle{};
+  auto result=esp_partition_mmap(partition,0,partition->size,ESP_PARTITION_MMAP_DATA,&mapped,&handle);
+  if (result!=ESP_OK) return result;
+  uint8_t bytes[256];
+  for (size_t offset=0;offset<partition->size;offset+=sizeof(bytes)) {
+    result=esp_partition_read_raw(partition,offset,bytes,sizeof(bytes));
+    if (result!=ESP_OK) break;
+    if (memcmp(bytes,static_cast<const uint8_t *>(mapped)+offset,sizeof(bytes))!=0) {
+      result=ESP_ERR_INVALID_CRC;
+      break;
+    }
+  }
+  esp_partition_munmap(handle);
+  return result;
+}
+#endif
+
 static void inspectNvs() {
   const auto *partition=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_NVS,"nvs");
   if (!partition || partition->address!=0x9000 || partition->size!=0x5000) return;
+#if !SPHERE_OTA_NVS_TRACE
+  flashReadCheck=verifyFlashReadPath(partition);
+  if (flashReadCheck!=ESP_OK) return;
+#endif
   nvsPhase.store(1);
 #if SPHERE_OTA_NVS_TRACE
   sphereNvsTrace::recordingMount=true;
@@ -112,11 +138,11 @@ void sphereNvsUnlock() {
 }
 void sphereNvsPrint(Stream &out) {
   const uint32_t mutation=firstMutation.load();
-  out.printf("M3E_NVS init=%d open=%d key=%d read=%d valid=%u version=%u blocked=%u unlocked=%u first_op=%u first_phase=%u first_address=%06lx first_pc=%08lx\n",
+  out.printf("M3E_NVS init=%d open=%d key=%d read=%d valid=%u version=%u blocked=%u unlocked=%u first_op=%u first_phase=%u first_address=%06lx first_pc=%08lx flash_read_check=%d\n",
       int(initResult),int(openResult),int(keyResult),int(readResult),unsigned(recordValid),
       unsigned(recordVersion),blockedMutations.load(),unsigned(nvsUnlocked.load()),
       unsigned(mutation>>28),unsigned((mutation>>24)&15),
-      (unsigned long)(mutation&0xffffff),(unsigned long)firstCaller.load());
+      (unsigned long)(mutation&0xffffff),(unsigned long)firstCaller.load(),int(flashReadCheck));
 #if SPHERE_OTA_NVS_TRACE
   sphereNvsTrace::print(out);
 #endif
