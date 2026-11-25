@@ -3,7 +3,13 @@
 #include "gesture_manager.h"
 constexpr uint8_t DEBUG_SPHERE_MOTOR_PAGE = 12;
 constexpr uint8_t DEBUG_SPHERE_RGB_PAGE = DEBUG_SPHERE_MOTOR_PAGE+1;
-constexpr uint8_t DEBUG_PAGE_COUNT = DEBUG_SPHERE_RGB_PAGE+1;
+constexpr uint8_t DEBUG_SPHERE_OTA_PAGE=DEBUG_SPHERE_RGB_PAGE+1;
+constexpr uint8_t DEBUG_PAGE_COUNT=DEBUG_SPHERE_OTA_PAGE+1;
+enum class SphereOtaUi : uint8_t { Idle, Confirm, Query, Arming, Starting, Ack, Unknown, Refused };
+struct DebugSphereOta { uint8_t id=1; SphereOtaUi state=SphereOtaUi::Idle; };
+const DebugSphereOta &debugSphereOta();
+bool debugSphereOtaTap(const GestureEvent &event);
+void debugSphereOtaUpdate();
 struct DebugSphereRgb {
   uint8_t id=1, brightness=50, color=0;
   bool unavailable=false;

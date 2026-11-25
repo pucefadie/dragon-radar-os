@@ -40,11 +40,12 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 
 ## M3 — Sfera prototipo e consumi (1 unità prima di replicare)
 - Verificare sul banco IMR14500 500 mAh + protezione PCM 1S, carica, connessioni, massimi di corrente e tensione; non assumere protezioni integrate.
-- **M3a PASS funzionale via USB** impulso di avvio, comando seriale, cooldown e stabilità DRA1 sotto carico verificati. Durate elettriche, transitori di reset e tenuta della 3V3 restano da misurare. Tre WS2812B predisposti su D5 e disabilitati.
+- **M3a PASS funzionale via USB** impulso di avvio, comando seriale, cooldown e stabilità DRA1 sotto carico verificati. Durate elettriche, transitori di reset e tenuta della 3V3 restano da misurare. Il GPIO D5 è stato riservato ai LED RGB, poi installati in coppia in M3d.
 - **M3b PASS funzionale via USB** comando manuale DRA1 da Debug. Test host, build S3/C6, installazione, 60 s DRA1 e prova supervisionata del Grove passati. Due impulsi ai tocchi accettati e nessun impulso durante il cooldown. Restano aperte le misure strumentali M3a.
 - **M3c PASS funzionale** l'operatore ha confermato il collaudo del feedback al ritrovamento. Le app S3 M3c e C6 M3b costituiscono il checkpoint storico del collaudo.
 - **M3 multisfera** sette peer autenticati, selezione, vibrazione indirizzata, ritrovamenti e Nuova partita. Simulazione con sette sfere e build S3/C6 completate. PASS funzionale con la sola sfera ID 1 confermato dall’operatore. Gli artefatti S3 multisfera e C6 M3b sono la baseline attuale. Provisioning e collaudo con più sfere restano aperti.
 - **M3d RGB** due WS2812B su D5, effetti di stato e diagnostica per ID via DRA1. Rosso a bassa luminosità confermato con l’app temporanea. Build S3 e C6 passate. C6 installato con readback e conferma visiva di bianco e attesa rossa. Restano le misure elettriche e la prova con radar e Grove.
+- **M3e OTA C6** manutenzione esplicita via USB o DRA1, trasferimento diretto PC → sfera, firma per ID, due slot e bootloader con rollback. Migrazione USB e prove al banco ancora da autorizzare. [Procedura OTA](SPHERE_OTA.md)
 - Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 

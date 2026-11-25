@@ -117,7 +117,7 @@ void SecureRadio::established(uint32_t now) {
   motorSequence_=lastMotorRequest_=0;
   rgbReplay_.reset();
   rgbReplay_.beginAuthenticatedSession(handle,true);
-  rgbSequence_=lastRgb_=0;
+  rgbSequence_=lastRgb_=sphereFirmwareVersion_=0;
   peers_.beginAuthenticatedSession(config_.id,config_.peer,handle,now,true);
   online_=true;
   attempting_=false;
@@ -192,6 +192,10 @@ bool SecureRadio::requestMotor(uint32_t now) {
 }
 
 static bool validRgb(uint32_t command) {
+  if (command>=3072) {
+    return command==sphereOtaCommand(RgbAction::OtaInfo) || command==sphereOtaCommand(RgbAction::OtaArm) ||
+           command==sphereOtaCommand(RgbAction::OtaStart);
+  }
   return command<3072 && (command&127)<=100 && ((command>>7)&7)<7 &&
          ((command>>10)!=uint32_t(RgbAction::Found) || command==rgbCommand(RgbAction::Found));
 }
@@ -204,6 +208,7 @@ bool SecureRadio::requestRgb(uint32_t now,uint32_t command) {
   if (!pack(frame,Kind::Rgb,current_,sequence,command) ||
       !rgbAck_.begin(config_.id,config_.peer,handle,sequence,frame,sizeof(frame),now)) return false;
   rgbStarted_=now;
+  rgbCommand_=command;
   rgbStatus_=SecureMotorStatus::Pending;
   return true;
 }
@@ -284,7 +289,7 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       if (!seq || seq>maxSequence || !validRgb(ack) || queueAge>=motorQueueMaxMs) return SecureRxEvent::None;
       break;
     case Kind::RgbResult:
-      if ((seq!=2 && seq!=4) || !ack) return SecureRxEvent::None;
+      if (((seq&255)!=2 && seq!=4) || !ack) return SecureRxEvent::None;
       break;
     case Kind::Ack:
       if (seq || !ack) return SecureRxEvent::None;
@@ -337,8 +342,12 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       result.type=RadioMessage::CommandAck; result.id=config_.id; result.destination=0;
       result.session=handle; result.ack_sequence=ack;
       if (kind==Kind::RgbResult) {
-        if (now-rgbStarted_<motorWindowMs && rgbAck_.acknowledge(source,result,true))
-          rgbStatus_=SecureMotorStatus(seq);
+        if ((seq<=255 || rgbCommand_==sphereOtaCommand(RgbAction::OtaInfo)) &&
+            now-rgbStarted_<motorWindowMs && rgbAck_.acknowledge(source,result,true)) {
+          rgbStatus_=SecureMotorStatus(seq&255);
+          if (rgbCommand_==sphereOtaCommand(RgbAction::OtaInfo) && (seq&255)==2)
+            sphereFirmwareVersion_=seq>>8;
+        }
       } else if (kind==Kind::VibrateResult) {
         if (now-motorStarted_>=motorWindowMs) cancelMotorRequest();
         else if (motorAck_.acknowledge(source,result,true)) motorStatus_=SecureMotorStatus(seq);
@@ -379,9 +388,10 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
   } else if (kind==Kind::Rgb && online_ && current && peers_.state(config_.id,now)==LinkState::Paired) {
     if (seq>lastRgb_ && rgbReplay_.accept(handle,seq)) {
       lastRgb_=seq;
-      lastRgbAccepted_=rgbHandler_ && rgbHandler_(ack,now);
+      lastRgbResult_=rgbHandler_ ? rgbHandler_(ack,now) : 4;
+      if ((lastRgbResult_&255)!=2) lastRgbResult_=4;
     }
-    if (seq==lastRgb_) emit(Kind::RgbResult,current_,lastRgbAccepted_?2:4,seq);
+    if (seq==lastRgb_) emit(Kind::RgbResult,current_,lastRgbResult_,seq);
   } else if (kind==Kind::Probe && online_ && current && peers_.state(config_.id,now)==LinkState::Paired) {
     if (replay_.accept(handle,seq)) {
       lastProbe_=seq;

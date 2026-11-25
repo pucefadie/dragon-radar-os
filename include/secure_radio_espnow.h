@@ -26,6 +26,21 @@ class SecureEspNow final : private SecureRadioIo {
     const auto *peer=findPeer(id);
     return peer ? peer->rgbStatus() : SecureMotorStatus::Unavailable;
   }
+  uint32_t sphereFirmwareVersion(uint8_t id) const {
+    const auto *peer=findPeer(id);
+    return peer ? peer->sphereFirmwareVersion() : 0;
+  }
+  bool deriveMaintenanceKey(uint8_t (&key)[32]) {
+    nvs_handle_t store;
+    if (controller_ || !configured_ || nvs_open(SECURE_RECORD_NAMESPACE,NVS_READONLY,&store)!=ESP_OK) return false;
+    SecureRadioConfig config{};
+    static constexpr uint8_t domain[]="DragonRadar/M3e/maintenance";
+    const bool ok=secureRadioLoadConfig(readRecord,&store,config,localId_) &&
+                  sign(config.auth,domain,sizeof(domain)-1,key);
+    nvs_close(store);
+    secureRadioClear(&config,sizeof(config));
+    return ok;
+  }
   void setRgbHandler(SecureRgbHandler handler) {
     if (auto *peer=findPeer(0)) peer->setRgbHandler(handler);
   }

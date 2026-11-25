@@ -1678,6 +1678,32 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
   char heading[32]; snprintf(heading,sizeof(heading),"DEBUG %u/%u",(unsigned)(page%DEBUG_PAGE_COUNT)+1,(unsigned)DEBUG_PAGE_COUNT);
   drawCenteredText(d,65,heading,RADAR_COLOR_GRID_BRIGHT,2);
   const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="",detail[48]="";
+  if (page==DEBUG_SPHERE_OTA_PAGE) {
+    const auto &ota=debugSphereOta();
+    const auto version=beaconServiceSphereVersion(ota.id);
+    drawCenteredText(d,112,"AGGIORNAMENTI OTA",RADAR_COLOR_GRID_BRIGHT,2);
+    snprintf(a,sizeof(a),"<       SFERA %u       >",unsigned(ota.id));
+    drawCenteredText(d,159,a,RADAR_COLOR_WHITE,2);
+    snprintf(a,sizeof(a),"SSID DragonBall-%02u",unsigned(ota.id));
+    drawCenteredText(d,191,a,RADAR_COLOR_WHITE,1);
+    drawCenteredText(d,211,secureLinkLabel(beaconServiceLinkForId(ota.id)),RADAR_COLOR_WHITE,1);
+    d->fillRoundRect(82,240,302,45,8,RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,252,ota.state==SphereOtaUi::Confirm ? "CONFERMA      ANNULLA" : "ATTIVA OTA",RADAR_COLOR_WHITE,2);
+    snprintf(a,sizeof(a),version ? "LEGGI VERSIONE  |  %lu" : "LEGGI VERSIONE  |  --",(unsigned long)version);
+    drawCenteredText(d,306,a,RADAR_COLOR_WHITE,1);
+    const char *message="";
+    switch (ota.state) {
+      case SphereOtaUi::Query: case SphereOtaUi::Arming: case SphereOtaUi::Starting:
+        message="IN ATTESA DI CONFERMA"; break;
+      case SphereOtaUi::Ack: message="COMANDO CONFERMATO  |  VERIFICA AP SUL PC"; break;
+      case SphereOtaUi::Unknown: message="ESITO NON VERIFICABILE"; break;
+      case SphereOtaUi::Refused: message="COMANDO NON DISPONIBILE O RIFIUTATO"; break;
+      default: break;
+    }
+    drawCenteredText(d,365,message,RADAR_COLOR_WHITE,1);
+    flushDisplay();
+    return;
+  }
   if (page==DEBUG_SPHERE_RGB_PAGE) {
     const auto &rgb=debugSphereRgb();
     const auto status=beaconServiceRgbStatus(rgb.id);

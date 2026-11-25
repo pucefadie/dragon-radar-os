@@ -18,11 +18,12 @@ enum class SecureRecordVersion : uint8_t { None, V1, V2 };
 enum class SecureLinkStatus : uint8_t { Unavailable, AwaitingHandshake, Paired, Lost, ChannelMismatch };
 enum class SecureMotorStatus : uint8_t { Idle, Pending, Accepted, CoolingDown, Unavailable, Unconfirmed };
 // Packed RGB operation: low 7 bits brightness, next 3 palette, next 2 action.
-enum class RgbAction : uint8_t { Off, On, Found };
+enum class RgbAction : uint8_t { Off, On, Found, OtaInfo, OtaArm, OtaStart };
+constexpr uint32_t sphereOtaCommand(RgbAction action) { return uint32_t(action)<<10; }
 inline uint32_t rgbCommand(RgbAction action,uint8_t brightness=50,uint8_t color=0) {
   return brightness | (uint32_t(color)<<7) | (uint32_t(action)<<10);
 }
-using SecureRgbHandler = bool (*)(uint32_t command,uint32_t now);
+using SecureRgbHandler = uint32_t (*)(uint32_t command,uint32_t now);
 using SecureMotorHandler = SecureMotorStatus (*)(uint32_t now);
 enum class SecureRxEvent : uint8_t { None, SessionStarted, ProbeAck };
 enum class SecureRecordRead { Missing, Loaded, Error };
@@ -75,6 +76,7 @@ class SecureRadio {
   bool requestMotor(uint32_t now);
   bool requestRgb(uint32_t now,uint32_t command);
   SecureMotorStatus rgbStatus() const { return rgbStatus_; }
+  uint32_t sphereFirmwareVersion() const { return sphereFirmwareVersion_; }
   void setRgbHandler(SecureRgbHandler handler) { rgbHandler_=handler; }
   void cancelMotorRequest();
   SecureMotorStatus motorStatus() const { return motorStatus_; }
@@ -104,7 +106,7 @@ class SecureRadio {
   SecureRgbHandler rgbHandler_=nullptr;
   SecureMotorStatus rgbStatus_=SecureMotorStatus::Idle;
   uint32_t rgbSequence_=0, lastRgb_=0, rgbStarted_=0;
-  bool lastRgbAccepted_=false;
+  uint32_t lastRgbResult_=4, rgbCommand_=0, sphereFirmwareVersion_=0;
   SecureMotorHandler motorHandler_=nullptr;
   SecureMotorStatus motorStatus_=SecureMotorStatus::Idle, lastMotorResult_=SecureMotorStatus::Unavailable;
   uint32_t motorSequence_=0, lastMotorRequest_=0, motorStarted_=0;

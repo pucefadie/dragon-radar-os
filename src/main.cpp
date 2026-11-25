@@ -898,6 +898,7 @@ void setup() {
 
 namespace {
 DebugSphereRgb rgbPage;
+DebugSphereOta otaPage;
 const char *rgbKey(uint8_t id,char (&key)[3]) {
   key[0]='b'; key[1]=char('0'+id); key[2]=0;
   return key;
@@ -941,6 +942,43 @@ bool debugSphereRgbTap(const GestureEvent &event) {
     }
   } else return false;
   return true;
+}
+
+const DebugSphereOta &debugSphereOta() { return otaPage; }
+
+bool debugSphereOtaTap(const GestureEvent &event) {
+  if (event.type!=Gesture::Tap || event.x<82 || event.x>=384) return false;
+  auto &s=otaPage.state;
+  if (s==SphereOtaUi::Arming || s==SphereOtaUi::Starting || s==SphereOtaUi::Query) return true;
+  if (event.y>=148 && event.y<190) {
+    otaPage.id=1+(otaPage.id-1+(event.x<233?6:1))%7;
+    s=SphereOtaUi::Idle;
+  } else if (event.y>=240 && event.y<285) {
+    if (s==SphereOtaUi::Confirm) {
+      if (event.x>=233) { s=SphereOtaUi::Idle; return true; }
+      s=beaconServiceRequestRgb(otaPage.id,sphereOtaCommand(RgbAction::OtaArm))
+        ? SphereOtaUi::Arming : SphereOtaUi::Refused;
+    } else s=SphereOtaUi::Confirm;
+  } else if (event.y>=290 && event.y<330) {
+    s=beaconServiceRequestRgb(otaPage.id,sphereOtaCommand(RgbAction::OtaInfo))
+      ? SphereOtaUi::Query : SphereOtaUi::Refused;
+  } else return false;
+  return true;
+}
+
+void debugSphereOtaUpdate() {
+  auto &s=otaPage.state;
+  if (s!=SphereOtaUi::Arming && s!=SphereOtaUi::Starting && s!=SphereOtaUi::Query) return;
+  const auto status=beaconServiceRgbStatus(otaPage.id);
+  if (status==SecureMotorStatus::Pending) return;
+  if (status!=SecureMotorStatus::Accepted) {
+    s=status==SecureMotorStatus::Unconfirmed ? SphereOtaUi::Unknown : SphereOtaUi::Refused;
+    return;
+  }
+  if (s==SphereOtaUi::Arming)
+    s=beaconServiceRequestRgb(otaPage.id,sphereOtaCommand(RgbAction::OtaStart))
+      ? SphereOtaUi::Starting : SphereOtaUi::Refused;
+  else s=s==SphereOtaUi::Starting ? SphereOtaUi::Ack : SphereOtaUi::Idle;
 }
 
 void loop() {
@@ -1021,10 +1059,14 @@ void loop() {
                                g_apps.active() == AppId::Debug && g_apps.debugPage() == DEBUG_SPHERE_MOTOR_PAGE;
   const bool sphereRgbPage = !g_debugLegacy && !g_apps.launcherOpen() &&
                              g_apps.active()==AppId::Debug && g_apps.debugPage()==DEBUG_SPHERE_RGB_PAGE;
-  if (sphereRgbPage && debugSphereRgbTap(gesture)) {}
+  const bool sphereOtaPage=!g_debugLegacy && !g_apps.launcherOpen() &&
+      g_apps.active()==AppId::Debug && g_apps.debugPage()==DEBUG_SPHERE_OTA_PAGE;
+  debugSphereOtaUpdate();
+  if ((sphereOtaPage && debugSphereOtaTap(gesture)) ||
+      (sphereRgbPage && debugSphereRgbTap(gesture))) {}
   else if (sphereMotorPage && debugSphereMotorTap(gesture)) beaconServiceRequestSphereMotor();
   else {
-    if (!sphereMotorPage && !sphereRgbPage && !g_apps.launcherOpen() && g_apps.active() == AppId::Debug &&
+    if (!sphereMotorPage && !sphereRgbPage && !sphereOtaPage && !g_apps.launcherOpen() && g_apps.active() == AppId::Debug &&
         gesture.type == Gesture::Hold) motorTriggerShortPulse();
     g_apps.gesture(gesture);
   }

@@ -230,6 +230,24 @@ void beaconServiceRequestSphereMotor() {
 #endif
 }
 
+SecureLinkStatus beaconServiceLinkForId(uint8_t id) {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) return secure.linkStatus(millis(),id);
+#else
+  (void)id;
+#endif
+  return SecureLinkStatus::Unavailable;
+}
+
+uint32_t beaconServiceSphereVersion(uint8_t id) {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) return secure.sphereFirmwareVersion(id);
+#else
+  (void)id;
+#endif
+  return 0;
+}
+
 bool beaconServiceRequestRgb(uint8_t id,uint32_t command) {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   return secureReady && secure.requestRgb(millis(),id,command);

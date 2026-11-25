@@ -46,6 +46,14 @@ class SphereMotor {
     return MotorTestResult::Started;
   }
 
+  void quiet(uint32_t now) {
+    if (!active_) return;
+    enabled_=output_.stop();
+    active_=false;
+    stopped_=now;
+    cooling_=true;
+  }
+
   void disable() {
     if (enabled_) output_.stop();
     enabled_ = active_ = false;

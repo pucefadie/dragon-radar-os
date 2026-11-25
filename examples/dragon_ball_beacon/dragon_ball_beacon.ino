@@ -49,6 +49,9 @@ static_assert(D4 != LED_BUILTIN && D4 != WIFI_ENABLE && D4 != WIFI_ANT_CONFIG &&
 static SphereMotorRmt motorOutput;
 static SphereMotor<SphereMotorRmt> motor(motorOutput);
 static MotorTestCommand motorCommand;
+#if SPHERE_OTA
+static void otaConsole(char c);
+#endif
 
 static SecureMotorStatus requestRemoteMotor(uint32_t now) {
   switch (motor.request(now)) {
@@ -66,7 +69,11 @@ static void pollMotorConsole() {
     return;
   }
   for (unsigned budget = 32; budget && Serial.available(); --budget) {
-    if (!motorCommand.consume(char(Serial.read()))) continue;
+    const char c=char(Serial.read());
+#if SPHERE_OTA
+    otaConsole(c);
+#endif
+    if (!motorCommand.consume(c)) continue;
     const auto result = motor.request(millis());
     switch (result) {
       case MotorTestResult::Started: Serial.println("MOTOR_TEST STARTED 120 ms"); break;
@@ -105,6 +112,11 @@ static sphereRgb::Animation rgb;
 static rmt_data_t rgbFrame[49];
 static bool rgbReady=false, rgbStarted=false;
 static uint32_t rgbInitAt=0;
+#if SPHERE_OTA
+#include "sphere_ota.h"
+static SphereOta maintenance;
+static void otaConsole(char c) { maintenance.usb(c,millis()); }
+#endif
 static uint32_t rgbRendered=0xffffffff;
 
 static void renderRgb(sphereRgb::Color c) {
@@ -120,20 +132,25 @@ static void renderRgb(sphereRgb::Color c) {
   if (rmtWriteAsync(sphereRgb::kChain.dataPin,rgbFrame,49)) rgbRendered=packed;
 }
 
-static bool handleRgb(uint32_t command,uint32_t now) {
+static uint32_t handleRgb(uint32_t command,uint32_t now) {
   const auto action=RgbAction(command>>10);
-  if (!rgbStarted) return false;
+#if SPHERE_OTA
+  if (action>=RgbAction::OtaInfo) return maintenance.command(action,now);
+#else
+  if (action>=RgbAction::OtaInfo) return 4;
+#endif
+  if (!rgbStarted) return 4;
   if (action==RgbAction::Found) {
     rgb.found(now);
-    return true;
+    return 2;
   }
   const uint8_t brightness=command&127;
   if (brightness!=rgb.brightness()) {
     Preferences store;
-    if (!store.begin("sphere_rgb") || store.putUChar("brightness",brightness)!=1) return false;
+    if (!store.begin("sphere_rgb") || store.putUChar("brightness",brightness)!=1) return 4;
   }
   rgb.manual(action==RgbAction::On,(command>>7)&7,brightness,now);
-  return true;
+  return 2;
 }
 
 static void beginRgb() {
@@ -143,13 +160,22 @@ static void beginRgb() {
   Preferences store;
   if (store.begin("sphere_rgb",true)) rgb.setBrightness(store.getUChar("brightness",50));
   rgbInitAt=millis();
-  secure.setRgbHandler(handleRgb);
+
 }
 #endif
 static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
 static uint32_t bootId=0, sequence=0, nextBeacon=0;
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+static bool otaHealthy=false;
+struct BootVerification {
+  ~BootVerification() { SphereOta::finishBoot(otaHealthy); }
+};
+#endif
 void setup() {
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  BootVerification verify;
+#endif
 #if SPHERE_MOTOR_USB_TEST
   const bool motorLow = sphereMotorSafeLow();
 #endif
@@ -199,7 +225,13 @@ void setup() {
     (void)secureReady;
 #endif
 #if defined(ARDUINO_XIAO_ESP32C6)
-    if (secureReady) beginRgb();
+    if (secureReady) {
+      beginRgb();
+      secure.setRgbHandler(handleRgb);
+#if SPHERE_OTA
+      otaHealthy=rgbReady && maintenance.begin(secure);
+#endif
+    }
 #endif
   }
 #endif
@@ -211,7 +243,7 @@ void loop() {
   motor.tick(millis());
 #endif
   if (!ready) { delay(100); return; }
-#if SPHERE_MOTOR_USB_TEST
+#if SPHERE_MOTOR_USB_TEST && !SPHERE_OTA
   pollMotorConsole();
 #endif
   #if RADIO_DEV_INSECURE
@@ -222,6 +254,15 @@ void loop() {
   if (devSphere->online()!=lastOnline) {lastOnline=devSphere->online(); Serial.printf("[DEV INSECURE] %s channel=%d\n",lastOnline?"LINK_RECOVERED":"LINK_LOST",DRAGON_RADIO_CHANNEL);}
 #else
   const uint32_t now = millis();
+#if SPHERE_OTA
+  if (maintenance.tick(now,[] {
+    motor.quiet(millis());
+    rgb.manual(false,0,rgb.brightness(),millis());
+    renderRgb({});
+    return rgbRendered==0 && rmtTransmitCompleted(sphereRgb::kChain.dataPin);
+  })) return;
+  pollMotorConsole();
+#endif
   secure.tick(now);
 #if defined(ARDUINO_XIAO_ESP32C6)
   if (rgbReady && (rgbStarted || now-rgbInitAt>=70)) {

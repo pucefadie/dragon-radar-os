@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Compile only. Isolate the C6 board and role so no other sketch is staged.
 set -euo pipefail
-if [[ $# -lt 2 || $# -gt 3 || ! "$1" =~ ^(radio|provision)$ || -e "$2" ||
+if [[ $# -lt 2 || $# -gt 3 || ! "$1" =~ ^(radio|ota|provision)$ || -e "$2" ||
       ! "${3:-1}" =~ ^[1-7]$ || ( "$1" == provision && $# == 3 ) ]]; then
-  echo "Usage: $0 radio NEW_OUTPUT_DIRECTORY [ID 1..7] | provision NEW_OUTPUT_DIRECTORY" >&2
+  echo "Usage: $0 radio|ota NEW_OUTPUT_DIRECTORY [ID 1..7] | provision NEW_OUTPUT_DIRECTORY" >&2
   exit 2
 fi
 project="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,7 +25,7 @@ mkdir "$stage" "$stage_root/cache" "$stage_root/artifacts"
 cp "$project/examples/$sketch/$sketch.ino" "$project/examples/dragon_m1c_c6/nvs_startup.cpp" "$stage/"
 cp "$project/include/"{beacon_protocol,dev_radio,dev_radio_tx,radio_link,secure_radio,secure_radio_espnow,secure_radio_provision}.h "$stage/"
 cp "$project/src/"{beacon_protocol,dev_radio,radio_link,secure_radio}.cpp "$stage/"
-if [[ "$role" == radio ]]; then
+if [[ "$role" != provision ]]; then
   cp "$project/examples/$sketch/"{dra1_user_led,sphere_motor,sphere_motor_gpio,sphere_motor_rmt,sphere_rgb}.h "$stage/"
   printf '#pragma once\n#define DRAGON_BALL_ID %d\n#define DRAGON_RADIO_CHANNEL 6\n' "${3:-1}" >"$stage/beacon_config.h"
 fi
@@ -34,9 +34,17 @@ if [[ "$white" != 0 && "$white" != 1 ]]; then
   printf '%s\n' 'SPHERE_RGB_STARTUP_WHITE must be 0 or 1' >&2
   exit 2
 fi
+ota=0
+version="${SPHERE_OTA_VERSION:-301}"
+if [[ "$role" == ota ]]; then
+  [[ "$version" =~ ^[1-9][0-9]{0,7}$ ]] && (( version <= 16777215 ))
+  ota=1
+  cp "$project/examples/$sketch/sphere_ota.csv" "$stage/partitions.csv"
+  cp "$project/examples/$sketch/sphere_ota.h" "$stage/"
+fi
 cli="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 "$cli" compile --fqbn 'esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota,CDCOnBoot=cdc' \
-  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision -DSPHERE_RGB_STARTUP_WHITE=$white" \
+  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision -DSPHERE_RGB_STARTUP_WHITE=$white -DSPHERE_OTA=$ota -DSPHERE_OTA_VERSION=$version" \
   --build-property 'compiler.c.elf.extra_flags=-Wl,--wrap=initArduino' \
   --jobs 4 --build-path "$(wslpath -w "$stage_root/cache")" \
   --output-dir "$(wslpath -w "$stage_root/artifacts")" "$(wslpath -w "$stage")" < /dev/null

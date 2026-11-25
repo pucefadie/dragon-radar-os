@@ -397,10 +397,12 @@ static void testSevenSpheres() {
 }
 
 static unsigned rgbCalls;
-static bool rgbTestHandler(uint32_t command,uint32_t) {
-  assert(command==rgbCommand(RgbAction::Found));
+static uint32_t rgbTestHandler(uint32_t command,uint32_t) {
+  if (command==sphereOtaCommand(RgbAction::OtaInfo)) return (301u<<8)|2;
+  assert(command==rgbCommand(RgbAction::Found) || command==sphereOtaCommand(RgbAction::OtaArm) ||
+         command==sphereOtaCommand(RgbAction::OtaStart));
   ++rgbCalls;
-  return true;
+  return 2;
 }
 
 static void testRgbCommand() {
@@ -451,6 +453,25 @@ static void testRgbCommand() {
   toRadar(sphereWire.take(),503);
   toSphere(request,504);
   assert(sphereWire.queue.empty() && rgbCalls==2);
+  assert(radar.requestRgb(510,sphereOtaCommand(RgbAction::OtaInfo)));
+  radar.tick(511);
+  toSphere(radarWire.take(),512);
+  toRadar(sphereWire.take(),513);
+  assert(radar.sphereFirmwareVersion()==301);
+  for (auto action : {RgbAction::OtaArm,RgbAction::OtaStart}) {
+    assert(radar.requestRgb(520,sphereOtaCommand(action)));
+    radar.tick(521);
+    const auto frame=radarWire.take();
+    assert(radarWire.destination==sphereMac[0]);
+    const auto calls=rgbCalls;
+    toSphere(frame,522);
+    toRadar(sphereWire.take(),523);
+    assert(radar.rgbStatus()==SecureMotorStatus::Accepted && rgbCalls==calls+1);
+    toSphere(frame,524);
+    toRadar(sphereWire.take(),525);
+    assert(rgbCalls==calls+1);
+  }
+  assert(radar.confirmations()==1 && radar.motorStatus()==SecureMotorStatus::Idle);
 }
 
 int main() {
