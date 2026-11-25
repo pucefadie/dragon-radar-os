@@ -8,13 +8,13 @@ L'SSID è `DragonBall-01` per ID 1, fino a `DragonBall-07`. La chiave WPA e la c
 
 ```sh
 scripts/sphere_ota.py /percorso/privato/sphere.bin credentials
-scripts/sphere_ota.py /percorso/privato/sphere.bin upload /percorso/app-c6.bin 302
+scripts/sphere_ota.py /percorso/privato/sphere.bin upload /percorso/app-c6.bin 312
 ```
 
 Connettere il PC all'AP locale prima di eseguire `upload`. Rimanere sulla rete anche se il sistema operativo segnala assenza di Internet. Per il browser, generare un manifest privato e aprire `http://192.168.4.1/`. Selezionare manifest e binario. La barra riflette i byte inviati dal browser. La risposta positiva indica immagine verificata e slot selezionato, da distinguere dall'esito del primo boot.
 
 ```sh
-scripts/sphere_ota.py /percorso/privato/sphere.bin manifest /percorso/app-c6.bin 302 /percorso/privato/release.json
+scripts/sphere_ota.py /percorso/privato/sphere.bin manifest /percorso/app-c6.bin 312 /percorso/privato/release.json
 ```
 
 Il manifest autentica il layout M3e, ID, versione crescente, lunghezza e SHA-256. Il ricevitore controlla il chip C6 e cerca il marcatore ID/versione dentro l'immagine autenticata. Le API ESP-IDF convalidano l'immagine prima di selezionarla. Il trasferimento scrive solo nello slot inattivo. L'AP scade dopo 120 s di attesa. Un trasferimento ha un limite separato di 90 s e uno stallo di lettura HTTP causa interruzione. Upload falliti o connessioni interrotte fanno chiudere l'AP e tornare a ESP-NOW. Dopo successo, l'app riavvia il dispositivo.
@@ -32,12 +32,12 @@ Il manifest autentica il layout M3e, ID, versione crescente, lunghezza e SHA-256
 | SPIFFS | `0x390000` | `0x60000` |
 | Coredump | `0x3f0000` | `0x10000` |
 
-Compilare l'app con Arduino ESP32 3.3.12 tramite `SPHERE_OTA_VERSION=301 scripts/build_m1c_c6.sh ota build/c6-301 1`. L'ID è l'ultimo argomento. Il CSV locale dello sketch è la tabella effettiva. Compilare separatamente il bootloader con ESP-IDF 5.5.4 già attivato tramite `scripts/build_sphere_ota_bootloader.sh build/c6-rollback-loader`. Verificare che le due tabelle generate coincidano. Il loader dedicato è compilato con rollback abilitato. L'app configura un termine di 10 s durante lo startup in stato PENDING_VERIFY. Conferma quando la configurazione locale, ESP-NOW, il peer e l'infrastruttura RGB/OTA sono inizializzati. Il pairing con il radar è indipendente dalla verifica. Un errore rilevato richiede il rollback; un reset prima della conferma permette al loader di marcare ABORTED e ricaricare l'app precedente. La prova di post-reset sul C6 rimane da eseguire. [Espressif OTA e rollback](https://docs.espressif.com/projects/esp-idf/en/release-v5.5/esp32c6/api-reference/system/ota.html)
+Compilare l'app con Arduino ESP32 3.3.12 tramite `SPHERE_OTA_VERSION=311 scripts/build_m1c_c6.sh ota build/c6-311 1`. L'ID è l'ultimo argomento. Il CSV locale dello sketch è la tabella effettiva. Compilare separatamente il bootloader con ESP-IDF 5.5.4 già attivato tramite `scripts/build_sphere_ota_bootloader.sh build/c6-rollback-loader`. Verificare che le due tabelle generate coincidano. Il loader dedicato è compilato con rollback abilitato. L'app configura un termine di 10 s durante lo startup in stato PENDING_VERIFY. Conferma quando la configurazione locale, ESP-NOW, il peer e l'infrastruttura RGB/OTA sono inizializzati. Il pairing con il radar è indipendente dalla verifica. Un errore rilevato richiede il rollback; un reset prima della conferma permette al loader di marcare ABORTED e ricaricare l'app precedente. La prova di post-reset sul C6 rimane da eseguire. [Espressif OTA e rollback](https://docs.espressif.com/projects/esp-idf/en/release-v5.5/esp32c6/api-reference/system/ota.html)
 
 ## Migrazione USB una tantum
 
 1. Dopo autorizzazione, mettere il solo XIAO C6 in ROM via USB, Grove e batteria scollegati. Identificare dispositivo e capacità di 4 MiB, verificare protezioni e porta. Acquisire due dump completi indipendenti e verificare i rispettivi SHA-256 e l'identità byte per byte. Conservare gli originali in locale.
-2. Eseguire `scripts/prepare_sphere_ota_migration.py dump-a.bin dump-b.bin partition-table.bin bootloader.bin app-301.bin directory-privata-nuova`. Il controllo richiede il layout no_ota storico, selezione OTA0 valida e SPIFFS vuota. Per SPIFFS con dati, predisporre una migrazione dati prima di scrivere. Il controllo sul vecchio dump è di fattibilità. Al banco servono due nuovi dump.
+2. Eseguire `scripts/prepare_sphere_ota_migration.py dump-a.bin dump-b.bin partition-table.bin bootloader.bin app-311.bin directory-privata-nuova`. Il controllo richiede il layout no_ota storico, selezione OTA0 valida e SPIFFS vuota. Per SPIFFS con dati, predisporre una migrazione dati prima di scrivere. Il controllo sul vecchio dump è di fattibilità. Al banco servono due nuovi dump.
 3. Con autorizzazione esplicita alle tre scritture, usare esptool in ROM con reset finale disabilitato. Scrivere solo bootloader, tabella e OTA0. Usare gli artefatti privati verificati e la porta riconfermata. NVS, otadata e coredump restano fuori dall'operazione. L'area OTA1 va popolata dal successivo upload firmato.
 
    ```sh
@@ -51,6 +51,21 @@ Compilare l'app con Arduino ESP32 3.3.12 tramite `SPHERE_OTA_VERSION=301 scripts
 
 ## Collaudo
 
-- **Solo C6** dopo migrazione autorizzata, verificare assenza AP all'avvio, `ota_start`, WPA, timeout senza upload, firma/ID/versione/chip errati, upload interrotto, 301 → 302, primo boot, stato OTA, DRC1 e luminosità persistenti. Verificare il ritorno a OTA0 con una release di banco firmata con autoverifica deliberatamente fallita. Verificare separatamente reset o perdita alimentazione durante ricezione e prima della conferma del boot.
+- **Solo C6** dopo migrazione autorizzata, verificare assenza AP all'avvio, `ota_start`, WPA, timeout senza upload, firma/ID/versione/chip errati, upload interrotto, 301 → 312, primo boot, stato OTA, DRC1 e luminosità persistenti. Verificare il ritorno a OTA0 con una release di banco firmata con autoverifica deliberatamente fallita. Verificare separatamente reset o perdita alimentazione durante ricezione e prima della conferma del boot.
 - **C6 + S3** verificare pagina Debug, query versione, conferma e indirizzamento della richiesta, compatibilità con C6 precedenti, ripresa DRA1 e funzioni RGB. La verifica che le altre sfere restino operative richiede più di una sfera fisica.
 - Le misure RGB/Grove, il GPS sul campo e il collaudo multisfera fisica restano prove separate.
+
+## Recupero M3e.1 del C6 ID 1 già migrato
+
+Il reset dopo la migrazione v301 ha lasciato il settore NVS `0x9000` con intestazione Active e sequenza 0, al posto di Full con sequenza 0. I settori `0xa000–0xdfff` sono identici, inclusi pagina Active 20, namespace `dragon_radio` e blob/index DRC1. La bitmap della prima pagina è passata da 20 slot scritti e 106 cancellati a 70 scritti e 56 vuoti. Il passaggio di bit da 0 a 1 implica una cancellazione del settore. Il nuovo contenuto include namespace Wi-Fi/PHY riallocati e lascia riferimenti orfani nelle altre pagine. La normale GC su pagine riconosciute dal PageManager assegnerebbe una sequenza successiva a 20. Il dump, quindi, mostra una reinizializzazione anomala della prima pagina. Non identifica il chiamante né il codice NVS restituito durante v301. [Formato NVS Espressif](https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32/api-reference/storage/nvs_flash.html)
+
+M3d e M3e usano lo stesso SDK Arduino 3.3.12, con app ESP-IDF 5.5.5, `nvs_flash_init()` senza erase-and-retry e NVS non cifrata. Il bootloader dedicato ESP-IDF 5.5.4 è DIO/80 MHz, usa la tabella a `0x8000` e le routine di mutazione otadata. Il binario non incorpora il gestore NVS. Le configurazioni NVS non dimostrano un’incompatibilità di formato. In v301 la telemetria si ferma prima della riuscita di `secure.begin()`; `Preferences` e la derivazione credenziali OTA vengono invocate dopo quel gate.
+
+La build v311 blocca `esp_partition_write`, `esp_partition_write_raw` e `esp_partition_erase_range` sulla NVS fin dal mount. Prima di accendere il Wi-Fi verifica il layout, apre il namespace in sola lettura e valida il record con lo stesso decoder del collegamento. Registra i soli codici `init/open/key/read` e il numero di mutazioni bloccate. Il Wi-Fi usa storage RAM. Le scritture normali diventano disponibili dopo l’inizializzazione locale di peer DRA1, RGB e manutenzione. Una verifica fallita lascia la protezione attiva. Questo contiene il difetto osservato e rende misurabile l’errore nel prossimo avvio.
+
+Per il **solo C6 già migrato**, attendere autorizzazione alle due scritture seguenti.
+
+1. Con sola USB, Grove e batteria scollegati, verificare in ROM identità, 4 MiB e stato corrente. Confrontare l’intestazione con il dump post-v301 e i settori NVS `0xa000–0xdfff` con i due dump originali. Verificare che la tabella resti M3e, OTA0 selezionata, OTA1 intatta e che la differenza NVS rimanga limitata a `0x9000`. In presenza di altre differenze, ricalcolare il piano prima di scrivere.
+2. Ripristinare il **solo settore da 4.096 byte a `0x9000`** usando `restore-sector-0x9000.bin`. La copia integrale privata `restore-nvs-0x9000.bin` da 20.480 byte resta disponibile per recupero separato. Scrivere la sola app v311 a `0x10000`. Usare il comando esptool riportato sopra con gli stessi parametri, sostituendo le coppie indirizzo/file con `0x9000 restore-sector-0x9000.bin 0x10000 v311.bin`. Bootloader, tabella, otadata, OTA1 e coredump restano fuori dalle scritture.
+3. Rileggere l’immagine e confrontare l’intera NVS con l’originale prima di avviare. Verificare `M3E_NVS init=0 open=0 key=0 read=0 valid=1 version=1`, `configured=1` e assenza dell’AP fino a `ota_start`. Conservare i contatori e confrontare di nuovo NVS e DRC1 dopo il boot. Se mount o lettura falliscono, usare i codici numerici e la rilettura in ROM per localizzare il percorso. Interrompere la prova prima di qualsiasi altro intervento di recupero.
+4. Solo dopo tale verifica, provare `DragonBall-01`, timeout e trasferimento firmato v311 → v312. Verificare readback OTA1, stato VALID, DRC1 e impostazioni. Tenere il candidato v313 con autoverifica deliberatamente fallita per una sessione di rollback separata.

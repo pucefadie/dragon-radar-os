@@ -34,18 +34,20 @@ if [[ "$white" != 0 && "$white" != 1 ]]; then
   printf '%s\n' 'SPHERE_RGB_STARTUP_WHITE must be 0 or 1' >&2
   exit 2
 fi
+wrap="-Wl,--wrap=initArduino"
 ota=0
-version="${SPHERE_OTA_VERSION:-301}"
+version="${SPHERE_OTA_VERSION:-311}"
 if [[ "$role" == ota ]]; then
   [[ "$version" =~ ^[1-9][0-9]{0,7}$ ]] && (( version <= 16777215 ))
   ota=1
   cp "$project/examples/$sketch/sphere_ota.csv" "$stage/partitions.csv"
-  cp "$project/examples/$sketch/sphere_ota.h" "$stage/"
+  cp "$project/examples/$sketch/"{sphere_ota,sphere_nvs_guard}.h "$stage/"
+  wrap+=",--wrap=esp_partition_write,--wrap=esp_partition_write_raw,--wrap=esp_partition_erase_range"
 fi
 cli="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 "$cli" compile --fqbn 'esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota,CDCOnBoot=cdc' \
   --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision -DSPHERE_RGB_STARTUP_WHITE=$white -DSPHERE_OTA=$ota -DSPHERE_OTA_VERSION=$version" \
-  --build-property 'compiler.c.elf.extra_flags=-Wl,--wrap=initArduino' \
+  --build-property "compiler.c.elf.extra_flags=$wrap" \
   --jobs 4 --build-path "$(wslpath -w "$stage_root/cache")" \
   --output-dir "$(wslpath -w "$stage_root/artifacts")" "$(wslpath -w "$stage")" < /dev/null
 cp "$stage_root/artifacts/"* "$out/"

@@ -45,7 +45,7 @@ Aggiornamento: 2026-11-18. Questa roadmap coordina Codex e revisione ChatGPT, no
 - **M3c PASS funzionale** l'operatore ha confermato il collaudo del feedback al ritrovamento. Le app S3 M3c e C6 M3b costituiscono il checkpoint storico del collaudo.
 - **M3 multisfera** sette peer autenticati, selezione, vibrazione indirizzata, ritrovamenti e Nuova partita. Simulazione con sette sfere e build S3/C6 completate. PASS funzionale con la sola sfera ID 1 confermato dall’operatore. Gli artefatti S3 multisfera e C6 M3b sono la baseline attuale. Provisioning e collaudo con più sfere restano aperti.
 - **M3d RGB** due WS2812B su D5, effetti di stato e diagnostica per ID via DRA1. Rosso a bassa luminosità confermato con l’app temporanea. Build S3 e C6 passate. C6 installato con readback e conferma visiva di bianco e attesa rossa. Restano le misure elettriche e la prova con radar e Grove.
-- **M3e OTA C6** manutenzione esplicita via USB o DRA1, trasferimento diretto PC → sfera, firma per ID, due slot e bootloader con rollback. Migrazione USB ID 1 e readback passati. Primo avvio v301 con errore NVS/radio da risolvere prima delle prove wireless e rollback. [Procedura OTA](SPHERE_OTA.md)
+- **M3e OTA C6** manutenzione esplicita via USB o DRA1, trasferimento diretto PC → sfera, firma per ID, due slot e bootloader con rollback. Migrazione USB ID 1 e readback passati. Primo avvio v301 con reinizializzazione anomala di un settore NVS. M3e.1 protegge il mount e il primo avvio e prepara il recupero di un solo settore. Ripresa sul banco da autorizzare. [Procedura OTA](SPHERE_OTA.md)
 - Interruttore, sleep, wake e misure di autonomia restano sviluppi successivi.
 - Testare portata/applicazione RSSI outdoor/indoor e recovery; replicare soltanto dopo risultato affidabile.
 

@@ -4,6 +4,13 @@
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <esp_partition.h>
+#include <atomic>
+#include "secure_radio.h"
+#include "sphere_nvs_guard.h"
+#ifndef DRAGON_BALL_ID
+#include "beacon_config.h"
+#endif
 #endif
 
 #if !CONFIG_IDF_TARGET_ESP32C6 || !M1C_C6_NVS_GUARD || RADIO_DEV_INSECURE
@@ -18,6 +25,86 @@
 #endif
 
 #if SPHERE_OTA
+namespace {
+std::atomic<bool> nvsUnlocked{false};
+std::atomic<unsigned> blockedMutations{0};
+std::atomic<uint32_t> firstMutation{0};
+std::atomic<uintptr_t> firstCaller{0};
+std::atomic<unsigned> nvsPhase{0};
+
+esp_err_t initResult=ESP_ERR_INVALID_STATE, openResult=ESP_ERR_INVALID_STATE;
+esp_err_t keyResult=ESP_ERR_INVALID_STATE, readResult=ESP_ERR_INVALID_STATE;
+bool recordValid=false;
+uint8_t recordVersion=0;
+}
+
+extern "C" esp_err_t __real_esp_partition_write(const esp_partition_t *,size_t,const void *,size_t);
+extern "C" esp_err_t __real_esp_partition_write_raw(const esp_partition_t *,size_t,const void *,size_t);
+extern "C" esp_err_t __real_esp_partition_erase_range(const esp_partition_t *,size_t,size_t);
+
+static bool rejectMutation(const esp_partition_t *partition,size_t relative,unsigned operation,void *caller) {
+  if (!partition || !sphereNvsMutationBlocked(nvsUnlocked.load(),partition->address,
+      partition->type==ESP_PARTITION_TYPE_DATA && partition->subtype==ESP_PARTITION_SUBTYPE_DATA_NVS)) return false;
+  if (blockedMutations.fetch_add(1)==0) {
+    const auto address=uint32_t(partition->address+relative);
+    firstCaller.store(reinterpret_cast<uintptr_t>(caller));
+    firstMutation.store((operation<<28)|(nvsPhase.load()<<24)|(address&0xffffff));
+  }
+  return true;
+}
+extern "C" esp_err_t __wrap_esp_partition_write(const esp_partition_t *p,size_t off,const void *buf,size_t n) {
+  return rejectMutation(p,off,1,__builtin_return_address(0)) ? ESP_ERR_INVALID_STATE : __real_esp_partition_write(p,off,buf,n);
+}
+extern "C" esp_err_t __wrap_esp_partition_write_raw(const esp_partition_t *p,size_t off,const void *buf,size_t n) {
+  return rejectMutation(p,off,2,__builtin_return_address(0)) ? ESP_ERR_INVALID_STATE : __real_esp_partition_write_raw(p,off,buf,n);
+}
+extern "C" esp_err_t __wrap_esp_partition_erase_range(const esp_partition_t *p,size_t off,size_t n) {
+  return rejectMutation(p,off,3,__builtin_return_address(0)) ? ESP_ERR_INVALID_STATE : __real_esp_partition_erase_range(p,off,n);
+}
+
+static SecureRecordRead earlyRead(void *storage,const char *key,uint8_t *bytes,size_t &length) {
+  const auto handle=*static_cast<nvs_handle_t *>(storage);
+  nvs_type_t type;
+  keyResult=nvs_find_key(handle,key,&type);
+  if (keyResult==ESP_ERR_NVS_NOT_FOUND) return SecureRecordRead::Missing;
+  if (keyResult!=ESP_OK || type!=NVS_TYPE_BLOB) {
+    readResult=keyResult==ESP_OK ? ESP_ERR_NVS_TYPE_MISMATCH : keyResult;
+    return SecureRecordRead::Error;
+  }
+  readResult=nvs_get_blob(handle,key,bytes,&length);
+  return readResult==ESP_OK ? SecureRecordRead::Loaded : SecureRecordRead::Error;
+}
+
+static void inspectNvs() {
+  const auto *partition=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_NVS,"nvs");
+  if (!partition || partition->address!=0x9000 || partition->size!=0x5000) return;
+  nvsPhase.store(1);
+  initResult=nvs_flash_init();
+  if (initResult!=ESP_OK) return;
+  nvs_handle_t storage;
+  nvsPhase.store(2);
+  openResult=nvs_open(SECURE_RECORD_NAMESPACE,NVS_READONLY,&storage);
+  if (openResult!=ESP_OK) return;
+  SecureRadioConfig config{};
+  nvsPhase.store(3);
+  recordValid=secureRadioLoadConfig(earlyRead,&storage,config,DRAGON_BALL_ID);
+  if (recordValid) recordVersion=uint8_t(config.version);
+  secureRadioClear(&config,sizeof(config));
+  nvs_close(storage);
+  nvsPhase.store(4);
+}
+
+bool sphereNvsReady() { return recordValid; }
+void sphereNvsUnlock() { if (recordValid) nvsUnlocked.store(true); }
+void sphereNvsPrint(Stream &out) {
+  const uint32_t mutation=firstMutation.load();
+  out.printf("M3E_NVS init=%d open=%d key=%d read=%d valid=%u version=%u blocked=%u unlocked=%u first_op=%u first_phase=%u first_address=%06lx first_pc=%08lx\n",
+      int(initResult),int(openResult),int(keyResult),int(readResult),unsigned(recordValid),
+      unsigned(recordVersion),blockedMutations.load(),unsigned(nvsUnlocked.load()),
+      unsigned(mutation>>28),unsigned((mutation>>24)&15),
+      (unsigned long)(mutation&0xffffff),(unsigned long)firstCaller.load());
+}
+
 static esp_timer_handle_t bootDeadline;
 static void restartUnverified(void *) { esp_restart(); }
 void sphereOtaCancelBootDeadline() {
@@ -45,6 +132,9 @@ extern "C" void __wrap_initArduino() {
       esp_ota_mark_app_invalid_rollback_and_reboot();
   }
 #endif
+#if SPHERE_OTA
+  inspectNvs();
+#else
   const esp_err_t result = nvs_flash_init();
   if (result != ESP_OK) {
 #if SPHERE_OTA
@@ -59,6 +149,7 @@ extern "C" void __wrap_initArduino() {
     }
   }
   Serial.println("M1C_C6_NVS_GUARD=1");
+#endif
 #if !M1C_C6_PROVISION
   WiFi.persistent(false);
   WiFi.setAutoReconnect(false);

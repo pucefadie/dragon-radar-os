@@ -114,6 +114,7 @@ static bool rgbReady=false, rgbStarted=false;
 static uint32_t rgbInitAt=0;
 #if SPHERE_OTA
 #include "sphere_ota.h"
+#include "sphere_nvs_guard.h"
 static SphereOta maintenance;
 static void otaConsole(char c) { maintenance.usb(c,millis()); }
 #endif
@@ -188,6 +189,10 @@ void setup() {
   gpio_sleep_sel_en(kUserLedPin);
 #endif
   Serial.begin(115200);
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  sphereNvsPrint(Serial);
+  if (!sphereNvsReady()) return;
+#endif
 #if defined(ARDUINO_XIAO_ESP32C6)
   // Seeed XIAO ESP32-C6: enable RF switch, then select external U.FL antenna.
   // Use only with the antenna connected. GPIO3/14 are dedicated to this switch.
@@ -196,6 +201,9 @@ void setup() {
   pinMode(WIFI_ANT_CONFIG,OUTPUT); digitalWrite(WIFI_ANT_CONFIG,HIGH);
 #endif
   WiFi.mode(WIFI_STA);
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  if (esp_wifi_set_storage(WIFI_STORAGE_RAM)!=ESP_OK) return;
+#endif
   WiFi.disconnect(false, false);
   if (esp_wifi_set_channel(DRAGON_RADIO_CHANNEL,WIFI_SECOND_CHAN_NONE)!=ESP_OK || esp_now_init()!=ESP_OK) {
     Serial.println("ESP-NOW init failed"); return;
@@ -230,6 +238,7 @@ void setup() {
       secure.setRgbHandler(handleRgb);
 #if SPHERE_OTA
       otaHealthy=rgbReady && maintenance.begin(secure);
+      if (otaHealthy) sphereNvsUnlock();
 #endif
     }
 #endif
@@ -238,6 +247,13 @@ void setup() {
   Serial.printf("Dragon beacon ID=%d channel=%d (broadcast, not authenticated)\n",DRAGON_BALL_ID,DRAGON_RADIO_CHANNEL);
 }
 void loop() {
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  static uint32_t nvsReportAt=0;
+  if (millis()-nvsReportAt>=5000) {
+    nvsReportAt=millis();
+    sphereNvsPrint(Serial);
+  }
+#endif
 #if SPHERE_MOTOR_USB_TEST
   if (!ready) motor.disable();
   motor.tick(millis());
