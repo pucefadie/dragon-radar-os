@@ -1685,22 +1685,24 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
     snprintf(a,sizeof(a),"<       SFERA %u       >",unsigned(ota.id));
     drawCenteredText(d,159,a,RADAR_COLOR_WHITE,2);
     snprintf(a,sizeof(a),"SSID DragonBall-%02u",unsigned(ota.id));
-    drawCenteredText(d,191,a,RADAR_COLOR_WHITE,1);
-    drawCenteredText(d,211,secureLinkLabel(beaconServiceLinkForId(ota.id)),RADAR_COLOR_WHITE,1);
+    drawCenteredText(d,188,a,RADAR_COLOR_WHITE,2);
+    drawCenteredText(d,211,secureLinkLabel(beaconServiceLinkForId(ota.id)),RADAR_COLOR_WHITE,2);
     d->fillRoundRect(82,240,302,45,8,RADAR_COLOR_GRID_DARK);
     drawCenteredText(d,252,ota.state==SphereOtaUi::Confirm ? "CONFERMA      ANNULLA" : "ATTIVA OTA",RADAR_COLOR_WHITE,2);
     snprintf(a,sizeof(a),version ? "LEGGI VERSIONE  |  %lu" : "LEGGI VERSIONE  |  --",(unsigned long)version);
-    drawCenteredText(d,306,a,RADAR_COLOR_WHITE,1);
+    drawCenteredText(d,304,a,RADAR_COLOR_WHITE,2);
     const char *message="";
     switch (ota.state) {
       case SphereOtaUi::Query: case SphereOtaUi::Arming: case SphereOtaUi::Starting:
         message="IN ATTESA DI CONFERMA"; break;
-      case SphereOtaUi::Ack: message="COMANDO CONFERMATO  |  VERIFICA AP SUL PC"; break;
+      case SphereOtaUi::Ack: message="COMANDO CONFERMATO"; break;
       case SphereOtaUi::Unknown: message="ESITO NON VERIFICABILE"; break;
-      case SphereOtaUi::Refused: message="COMANDO NON DISPONIBILE O RIFIUTATO"; break;
+      case SphereOtaUi::Refused: message="COMANDO NON DISPONIBILE"; break;
       default: break;
     }
-    drawCenteredText(d,365,message,RADAR_COLOR_WHITE,1);
+    drawCenteredText(d,352,message,RADAR_COLOR_WHITE,2);
+    if (ota.state==SphereOtaUi::Ack)
+      drawCenteredText(d,378,"VERIFICA AP SUL PC",RADAR_COLOR_WHITE,2);
     flushDisplay();
     return;
   }
