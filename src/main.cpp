@@ -9,6 +9,7 @@
 #include "display_module.h"
 #include "sensors_module.h"
 #include "gps_module.h"
+#include <Preferences.h>
 #include "app_manager.h"
 #include "standby_button.h"
 #include "app_radar.h"
@@ -895,6 +896,53 @@ void setup() {
   printHelp();
 }
 
+namespace {
+DebugSphereRgb rgbPage;
+const char *rgbKey(uint8_t id,char (&key)[3]) {
+  key[0]='b'; key[1]=char('0'+id); key[2]=0;
+  return key;
+}
+void loadRgbBrightness() {
+  Preferences store;
+  char key[3];
+  rgbPage.brightness=50;
+  if (store.begin("radar_rgb",true)) {
+    const uint8_t value=store.getUChar(rgbKey(rgbPage.id,key),50);
+    if (value<=100) rgbPage.brightness=value;
+  }
+}
+}
+
+const DebugSphereRgb &debugSphereRgb() {
+  static const bool loaded=(loadRgbBrightness(),true);
+  (void)loaded;
+  return rgbPage;
+}
+
+bool debugSphereRgbTap(const GestureEvent &event) {
+  if (event.type!=Gesture::Tap || event.x<82 || event.x>=384) return false;
+  if (event.y>=148 && event.y<193) {
+    rgbPage.id=1+(rgbPage.id-1+(event.x<233?6:1))%7;
+    loadRgbBrightness();
+    rgbPage.unavailable=false;
+  } else if (event.y>=195 && event.y<240) {
+    rgbPage.brightness=uint8_t(((event.x-82)*100+150)/301);
+  } else if (event.y>=242 && event.y<287) {
+    rgbPage.color=(rgbPage.color+(event.x<233?6:1))%7;
+  } else if (event.y>=295 && event.y<345) {
+    if (beaconServiceRgbStatus(rgbPage.id)==SecureMotorStatus::Pending) return true;
+    rgbPage.unavailable=!beaconServiceRequestRgb(rgbPage.id,rgbCommand(
+        event.x<233 ? RgbAction::On : RgbAction::Off,rgbPage.brightness,rgbPage.color));
+    if (!rgbPage.unavailable) {
+      Preferences store;
+      char key[3];
+      if (store.begin("radar_rgb") && store.getUChar(rgbKey(rgbPage.id,key),50)!=rgbPage.brightness)
+        store.putUChar(key,rgbPage.brightness);
+    }
+  } else return false;
+  return true;
+}
+
 void loop() {
   // 1. Non-blocking periodic updates of all modules
   peripheralsUpdate();
@@ -956,7 +1004,7 @@ void loop() {
       beaconServiceNewGame();
     } else if (gesture.x >= RADAR_FOUND_X && gesture.x < RADAR_FOUND_X + RADAR_FOUND_WIDTH &&
                gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT) {
-      if (beaconServiceConfirmSphereFound() == SearchEvent::SphereFound) beaconServiceRequestSphereMotor();
+      if (beaconServiceConfirmSphereFound() == SearchEvent::SphereFound) beaconServiceSphereFoundFeedback();
     }
   }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Audiobookshelf && gesture.type == Gesture::Tap) {
@@ -971,9 +1019,12 @@ void loop() {
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings && gesture.type == Gesture::Tap) appSettingsTap(gesture.x, gesture.y);
   const bool sphereMotorPage = !g_debugLegacy && !g_apps.launcherOpen() &&
                                g_apps.active() == AppId::Debug && g_apps.debugPage() == DEBUG_SPHERE_MOTOR_PAGE;
-  if (sphereMotorPage && debugSphereMotorTap(gesture)) beaconServiceRequestSphereMotor();
+  const bool sphereRgbPage = !g_debugLegacy && !g_apps.launcherOpen() &&
+                             g_apps.active()==AppId::Debug && g_apps.debugPage()==DEBUG_SPHERE_RGB_PAGE;
+  if (sphereRgbPage && debugSphereRgbTap(gesture)) {}
+  else if (sphereMotorPage && debugSphereMotorTap(gesture)) beaconServiceRequestSphereMotor();
   else {
-    if (!sphereMotorPage && !g_apps.launcherOpen() && g_apps.active() == AppId::Debug &&
+    if (!sphereMotorPage && !sphereRgbPage && !g_apps.launcherOpen() && g_apps.active() == AppId::Debug &&
         gesture.type == Gesture::Hold) motorTriggerShortPulse();
     g_apps.gesture(gesture);
   }

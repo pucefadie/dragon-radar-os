@@ -103,6 +103,6 @@ int main() {
   assert(lines("test\n") == 0);
   assert(lines("motor_test\nmotor_test\n") == 2);
 
-  static_assert(sphereRgb::kChain.dataPin == 23 && sphereRgb::kChain.pixelCount == 3 &&
-                !sphereRgb::kChain.enabled, "External pixels must stay disabled");
+  static_assert(sphereRgb::kChain.dataPin == 23 && sphereRgb::kChain.dataPin != 22,
+                "LED output must remain separate from the motor GPIO");
 }

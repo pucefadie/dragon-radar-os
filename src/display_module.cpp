@@ -1678,6 +1678,30 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
   char heading[32]; snprintf(heading,sizeof(heading),"DEBUG %u/%u",(unsigned)(page%DEBUG_PAGE_COUNT)+1,(unsigned)DEBUG_PAGE_COUNT);
   drawCenteredText(d,65,heading,RADAR_COLOR_GRID_BRIGHT,2);
   const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="",detail[48]="";
+  if (page==DEBUG_SPHERE_RGB_PAGE) {
+    const auto &rgb=debugSphereRgb();
+    const auto status=beaconServiceRgbStatus(rgb.id);
+    constexpr const char *colors[]={"ROSSO","ARANCIONE","ORO","VERDE","BLU","VIOLA","BIANCO"};
+    drawCenteredText(d,115,"LED SFERA",RADAR_COLOR_GRID_BRIGHT,2);
+    snprintf(a,sizeof(a),"<       SFERA %u       >",unsigned(rgb.id));
+    drawCenteredText(d,160,a,RADAR_COLOR_WHITE,2);
+    snprintf(a,sizeof(a),"LUMINOSITA %u%%",unsigned(rgb.brightness));
+    drawCenteredText(d,202,a,RADAR_COLOR_WHITE,1);
+    d->drawFastHLine(82,225,302,RADAR_COLOR_GRID_MID);
+    d->fillCircle(82+301*rgb.brightness/100,225,5,RADAR_COLOR_YELLOW);
+    snprintf(a,sizeof(a),"<       %s       >",colors[rgb.color]);
+    drawCenteredText(d,256,a,RADAR_COLOR_WHITE,2);
+    d->fillRoundRect(82,295,302,50,8,RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,311,"ACCENDI        SPEGNI",RADAR_COLOR_WHITE,2);
+    const char *result=rgb.unavailable ? "SFERA NON DISPONIBILE" :
+      status==SecureMotorStatus::Pending ? "IN ATTESA" :
+      status==SecureMotorStatus::Accepted ? "COMANDO ACCETTATO" :
+      status==SecureMotorStatus::Unavailable ? "NON DISPONIBILE" :
+      status==SecureMotorStatus::Unconfirmed ? "NESSUNA CONFERMA" : "";
+    drawCenteredText(d,369,result,RADAR_COLOR_WHITE,1);
+    flushDisplay();
+    return;
+  }
   if (page == DEBUG_SPHERE_MOTOR_PAGE) {
     const auto link = beaconServiceSecureLinkStatus();
     const auto status = beaconServiceSphereMotorStatus();

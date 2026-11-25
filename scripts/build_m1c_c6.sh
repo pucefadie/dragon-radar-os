@@ -29,9 +29,14 @@ if [[ "$role" == radio ]]; then
   cp "$project/examples/$sketch/"{dra1_user_led,sphere_motor,sphere_motor_gpio,sphere_motor_rmt,sphere_rgb}.h "$stage/"
   printf '#pragma once\n#define DRAGON_BALL_ID %d\n#define DRAGON_RADIO_CHANNEL 6\n' "${3:-1}" >"$stage/beacon_config.h"
 fi
+white="${SPHERE_RGB_STARTUP_WHITE:-1}"
+if [[ "$white" != 0 && "$white" != 1 ]]; then
+  printf '%s\n' 'SPHERE_RGB_STARTUP_WHITE must be 0 or 1' >&2
+  exit 2
+fi
 cli="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 "$cli" compile --fqbn 'esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota,CDCOnBoot=cdc' \
-  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision" \
+  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision -DSPHERE_RGB_STARTUP_WHITE=$white" \
   --build-property 'compiler.c.elf.extra_flags=-Wl,--wrap=initArduino' \
   --jobs 4 --build-path "$(wslpath -w "$stage_root/cache")" \
   --output-dir "$(wslpath -w "$stage_root/artifacts")" "$(wslpath -w "$stage")" < /dev/null

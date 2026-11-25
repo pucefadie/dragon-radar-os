@@ -115,6 +115,9 @@ void SecureRadio::established(uint32_t now) {
   motorReplay_.beginAuthenticatedSession(handle,true);
   cancelMotorRequest();
   motorSequence_=lastMotorRequest_=0;
+  rgbReplay_.reset();
+  rgbReplay_.beginAuthenticatedSession(handle,true);
+  rgbSequence_=lastRgb_=0;
   peers_.beginAuthenticatedSession(config_.id,config_.peer,handle,now,true);
   online_=true;
   attempting_=false;
@@ -188,7 +191,28 @@ bool SecureRadio::requestMotor(uint32_t now) {
   return true;
 }
 
+static bool validRgb(uint32_t command) {
+  return command<3072 && (command&127)<=100 && ((command>>7)&7)<7 &&
+         ((command>>10)!=uint32_t(RgbAction::Found) || command==rgbCommand(RgbAction::Found));
+}
+
+bool SecureRadio::requestRgb(uint32_t now,uint32_t command) {
+  if (!controller_ || linkStatus(now,true)!=SecureLinkStatus::Paired || !validRgb(command) ||
+      rgbAck_.pending() || rgbSequence_==maxSequence) return false;
+  uint8_t frame[SECURE_RADIO_SIZE];
+  const auto sequence=++rgbSequence_;
+  if (!pack(frame,Kind::Rgb,current_,sequence,command) ||
+      !rgbAck_.begin(config_.id,config_.peer,handle,sequence,frame,sizeof(frame),now)) return false;
+  rgbStarted_=now;
+  rgbStatus_=SecureMotorStatus::Pending;
+  return true;
+}
+
 void SecureRadio::cancelMotorRequest() {
+  if (rgbStatus_==SecureMotorStatus::Pending) {
+    rgbAck_=RadioAckTracker{};
+    rgbStatus_=SecureMotorStatus::Unconfirmed;
+  }
   if (motorStatus_==SecureMotorStatus::Pending) {
     motorAck_=RadioAckTracker{};
     motorStatus_=SecureMotorStatus::Unconfirmed;
@@ -218,6 +242,12 @@ void SecureRadio::tick(uint32_t now) {
   if (motorStatus_==SecureMotorStatus::Pending) {
     if (now-motorStarted_>=motorWindowMs) cancelMotorRequest();
     else if (motorAck_.due(now,frame,length)) io_.sendMotor(config_.peer,frame,length);
+  }
+  if (rgbAck_.pending()) {
+    if (now-rgbStarted_>=motorWindowMs) {
+      rgbAck_=RadioAckTracker{};
+      rgbStatus_=SecureMotorStatus::Unconfirmed;
+    } else if (rgbAck_.due(now,frame,length)) io_.sendMotor(config_.peer,frame,length);
   }
   if (!ack_.pending() && int32_t(now-nextProbe_)>=0) {
     if (seq_==maxSequence) { online_=false; cancelMotorRequest(); return; } // Renew before signed replay window wraps.
@@ -250,6 +280,12 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       if (!seq || ack || (kind==Kind::Vibrate && (seq>maxSequence || queueAge>=motorQueueMaxMs)))
         return SecureRxEvent::None;
       break;
+    case Kind::Rgb:
+      if (!seq || seq>maxSequence || !validRgb(ack) || queueAge>=motorQueueMaxMs) return SecureRxEvent::None;
+      break;
+    case Kind::RgbResult:
+      if ((seq!=2 && seq!=4) || !ack) return SecureRxEvent::None;
+      break;
     case Kind::Ack:
       if (seq || !ack) return SecureRxEvent::None;
       break;
@@ -271,8 +307,8 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
     return SecureRxEvent::None;
   }
   const bool current=equal(nonce.a,current_.a,16) && equal(nonce.b,current_.b,16);
-  if (!current && online_ && (controller_ ? (kind==Kind::Ack || kind==Kind::VibrateResult) :
-                                         (kind==Kind::Probe || kind==Kind::Vibrate))) {
+  if (!current && online_ && (controller_ ? (kind==Kind::Ack || kind==Kind::VibrateResult || kind==Kind::RgbResult) :
+                                         (kind==Kind::Probe || kind==Kind::Vibrate || kind==Kind::Rgb))) {
     ++diagnostics_.stale_session;
     return SecureRxEvent::None;
   }
@@ -288,7 +324,7 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
     } else if (kind==Kind::Ready && freshAttempt && challenged_ && current) {
       established(now);
       return SecureRxEvent::SessionStarted;
-    } else if ((kind==Kind::Ack || kind==Kind::VibrateResult) && online_ && current &&
+    } else if ((kind==Kind::Ack || kind==Kind::VibrateResult || kind==Kind::RgbResult) && online_ && current &&
                peers_.state(config_.id,now)==LinkState::Paired) {
 #if M1C_BENCH_FIXTURE
       if (kind==Kind::Ack && benchAction_==M1cRadioAction::DropAck && ack_.pending() && ack==seq_) {
@@ -300,7 +336,10 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       RadioFrame result{};
       result.type=RadioMessage::CommandAck; result.id=config_.id; result.destination=0;
       result.session=handle; result.ack_sequence=ack;
-      if (kind==Kind::VibrateResult) {
+      if (kind==Kind::RgbResult) {
+        if (now-rgbStarted_<motorWindowMs && rgbAck_.acknowledge(source,result,true))
+          rgbStatus_=SecureMotorStatus(seq);
+      } else if (kind==Kind::VibrateResult) {
         if (now-motorStarted_>=motorWindowMs) cancelMotorRequest();
         else if (motorAck_.acknowledge(source,result,true)) motorStatus_=SecureMotorStatus(seq);
       } else if (ack_.acknowledge(source,result,true)) {
@@ -337,6 +376,12 @@ SecureRxEvent SecureRadio::receive(const uint8_t *source,const uint8_t *b,size_t
       if (!motorResult(uint8_t(lastMotorResult_))) lastMotorResult_=SecureMotorStatus::Unavailable;
     }
     if (seq==lastMotorRequest_) emit(Kind::VibrateResult,current_,uint8_t(lastMotorResult_),seq);
+  } else if (kind==Kind::Rgb && online_ && current && peers_.state(config_.id,now)==LinkState::Paired) {
+    if (seq>lastRgb_ && rgbReplay_.accept(handle,seq)) {
+      lastRgb_=seq;
+      lastRgbAccepted_=rgbHandler_ && rgbHandler_(ack,now);
+    }
+    if (seq==lastRgb_) emit(Kind::RgbResult,current_,lastRgbAccepted_?2:4,seq);
   } else if (kind==Kind::Probe && online_ && current && peers_.state(config_.id,now)==LinkState::Paired) {
     if (replay_.accept(handle,seq)) {
       lastProbe_=seq;

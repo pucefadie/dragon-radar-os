@@ -18,6 +18,17 @@ class SecureEspNow final : private SecureRadioIo {
     auto *peer=findPeer(id);
     return peer && aligned_ && !tx_.stalled() && peer->requestMotor(now);
   }
+  bool requestRgb(uint32_t now,uint8_t id,uint32_t command) {
+    auto *peer=findPeer(id);
+    return peer && aligned_ && !tx_.stalled() && peer->requestRgb(now,command);
+  }
+  SecureMotorStatus rgbStatus(uint8_t id) const {
+    const auto *peer=findPeer(id);
+    return peer ? peer->rgbStatus() : SecureMotorStatus::Unavailable;
+  }
+  void setRgbHandler(SecureRgbHandler handler) {
+    if (auto *peer=findPeer(0)) peer->setRgbHandler(handler);
+  }
   void cancelMotorRequest() {
     for (auto *peer : radio_) if (peer) peer->cancelMotorRequest();
   }

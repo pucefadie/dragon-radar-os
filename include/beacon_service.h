@@ -18,6 +18,9 @@ ProximitySnapshot beaconServiceProximity();
 void beaconServiceSetProximitySuspended(bool suspended);
 SearchEvent beaconServiceConfirmSphereFound();
 void beaconServiceRequestSphereMotor();
+void beaconServiceSphereFoundFeedback();
+bool beaconServiceRequestRgb(uint8_t id,uint32_t command);
+SecureMotorStatus beaconServiceRgbStatus(uint8_t id);
 SecureMotorStatus beaconServiceSphereMotorStatus();
 #if M1C_BENCH_FIXTURE
 bool beaconServiceFixtureCommand(const char *command, Stream &out);

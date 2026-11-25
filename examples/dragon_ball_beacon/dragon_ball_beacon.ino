@@ -45,8 +45,7 @@ static Dra1UserLed userLed;
 static_assert(D4 == kSphereMotorPin && D5 == sphereRgb::kChain.dataPin,
               "XIAO C6 motor/RGB pins do not match board profile");
 static_assert(D4 != LED_BUILTIN && D4 != WIFI_ENABLE && D4 != WIFI_ANT_CONFIG &&
-              D5 != LED_BUILTIN && D5 != WIFI_ENABLE && D5 != WIFI_ANT_CONFIG && D4 != D5 &&
-              !sphereRgb::kChain.enabled, "Actuator configuration conflicts with XIAO hardware");
+              D5 != LED_BUILTIN && D5 != WIFI_ENABLE && D5 != WIFI_ANT_CONFIG && D4 != D5, "Actuator configuration conflicts with XIAO hardware");
 static SphereMotorRmt motorOutput;
 static SphereMotor<SphereMotorRmt> motor(motorOutput);
 static MotorTestCommand motorCommand;
@@ -93,6 +92,59 @@ static DevRadioTx radioTx;
 static SecureEspNow secure(radioTx);
 static void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { radioTx.completed(status); }
 static void secureReceive(const esp_now_recv_info_t *info,const uint8_t *bytes,int len) { secure.enqueue(info,bytes,len); }
+#endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
+#include <Preferences.h>
+#include "sphere_rgb.h"
+#include <esp32-hal-rmt.h>
+// Full-white startup is a 500 ms bench load test. Disable only for comparison builds.
+#ifndef SPHERE_RGB_STARTUP_WHITE
+#define SPHERE_RGB_STARTUP_WHITE 1
+#endif
+static sphereRgb::Animation rgb;
+static rmt_data_t rgbFrame[49];
+static bool rgbReady=false, rgbStarted=false;
+static uint32_t rgbInitAt=0;
+static uint32_t rgbRendered=0xffffffff;
+
+static void renderRgb(sphereRgb::Color c) {
+  const uint32_t packed=(uint32_t(c.g)<<16)|(uint32_t(c.r)<<8)|c.b;
+  if (packed==rgbRendered || !rmtTransmitCompleted(sphereRgb::kChain.dataPin)) return;
+  for (unsigned i=0;i<48;++i) {
+    const bool bit=packed & (1u<<(23-i%24));
+    rgbFrame[i].level0=1;
+    rgbFrame[i].duration0=bit?16:7;
+    rgbFrame[i].duration1=bit?9:18;
+  }
+  rgbFrame[48].duration0=rgbFrame[48].duration1=3500;
+  if (rmtWriteAsync(sphereRgb::kChain.dataPin,rgbFrame,49)) rgbRendered=packed;
+}
+
+static bool handleRgb(uint32_t command,uint32_t now) {
+  const auto action=RgbAction(command>>10);
+  if (!rgbStarted) return false;
+  if (action==RgbAction::Found) {
+    rgb.found(now);
+    return true;
+  }
+  const uint8_t brightness=command&127;
+  if (brightness!=rgb.brightness()) {
+    Preferences store;
+    if (!store.begin("sphere_rgb") || store.putUChar("brightness",brightness)!=1) return false;
+  }
+  rgb.manual(action==RgbAction::On,(command>>7)&7,brightness,now);
+  return true;
+}
+
+static void beginRgb() {
+  const int pin=sphereRgb::kChain.dataPin;
+  rgbReady=rmtInit(pin,RMT_TX_MODE,RMT_MEM_NUM_BLOCKS_1,20000000) && rmtSetEOT(pin,LOW);
+  if (!rgbReady) return;
+  Preferences store;
+  if (store.begin("sphere_rgb",true)) rgb.setBrightness(store.getUChar("brightness",50));
+  rgbInitAt=millis();
+  secure.setRgbHandler(handleRgb);
+}
 #endif
 static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
@@ -146,6 +198,9 @@ void setup() {
 #else
     (void)secureReady;
 #endif
+#if defined(ARDUINO_XIAO_ESP32C6)
+    if (secureReady) beginRgb();
+#endif
   }
 #endif
   Serial.printf("Dragon beacon ID=%d channel=%d (broadcast, not authenticated)\n",DRAGON_BALL_ID,DRAGON_RADIO_CHANNEL);
@@ -169,6 +224,14 @@ void loop() {
   const uint32_t now = millis();
   secure.tick(now);
 #if defined(ARDUINO_XIAO_ESP32C6)
+  if (rgbReady && (rgbStarted || now-rgbInitAt>=70)) {
+    if (!rgbStarted) {
+      rgb.begin(now,SPHERE_RGB_STARTUP_WHITE);
+      rgbStarted=true;
+    }
+    if (secure.linkStatus(now)==SecureLinkStatus::Paired) rgb.paired(now);
+    renderRgb(rgb.update(now));
+  }
   if (userLed.update(secure.linkStatus(now), now))
     gpio_set_level(kUserLedPin, userLed.lit() ? LOW : HIGH);
 #endif

@@ -17,6 +17,12 @@ constexpr char SECURE_RECORD_V2_KEY[] = "peer_v2";
 enum class SecureRecordVersion : uint8_t { None, V1, V2 };
 enum class SecureLinkStatus : uint8_t { Unavailable, AwaitingHandshake, Paired, Lost, ChannelMismatch };
 enum class SecureMotorStatus : uint8_t { Idle, Pending, Accepted, CoolingDown, Unavailable, Unconfirmed };
+// Packed RGB operation: low 7 bits brightness, next 3 palette, next 2 action.
+enum class RgbAction : uint8_t { Off, On, Found };
+inline uint32_t rgbCommand(RgbAction action,uint8_t brightness=50,uint8_t color=0) {
+  return brightness | (uint32_t(color)<<7) | (uint32_t(action)<<10);
+}
+using SecureRgbHandler = bool (*)(uint32_t command,uint32_t now);
 using SecureMotorHandler = SecureMotorStatus (*)(uint32_t now);
 enum class SecureRxEvent : uint8_t { None, SessionStarted, ProbeAck };
 enum class SecureRecordRead { Missing, Loaded, Error };
@@ -67,6 +73,9 @@ class SecureRadio {
   void tick(uint32_t now);
   SecureRxEvent receive(const uint8_t *source, const uint8_t *bytes, size_t length, uint32_t now, uint32_t queueAge=0);
   bool requestMotor(uint32_t now);
+  bool requestRgb(uint32_t now,uint32_t command);
+  SecureMotorStatus rgbStatus() const { return rgbStatus_; }
+  void setRgbHandler(SecureRgbHandler handler) { rgbHandler_=handler; }
   void cancelMotorRequest();
   SecureMotorStatus motorStatus() const { return motorStatus_; }
   void setMotorHandler(SecureMotorHandler handler) { motorHandler_=handler; }
@@ -79,7 +88,7 @@ class SecureRadio {
   const M1cRadioResult &benchResult() const { return benchResult_; }
 #endif
  private:
-  enum class Kind : uint8_t { Hello=1, Challenge, Finish, Ready, Probe, Ack, Vibrate, VibrateResult };
+  enum class Kind : uint8_t { Hello=1, Challenge, Finish, Ready, Probe, Ack, Vibrate, VibrateResult, Rgb, RgbResult };
   struct Nonces { uint8_t a[16], b[16]; };
   void emit(Kind kind, const Nonces &nonce, uint32_t seq=0, uint32_t ack=0);
   bool pack(uint8_t *bytes, Kind kind, const Nonces &nonce, uint32_t seq, uint32_t ack);
@@ -90,7 +99,12 @@ class SecureRadio {
   PairingRegistry peers_;
   ReplayWindow replay_;
   RadioAckTracker ack_, motorAck_;
-  ReplayWindow motorReplay_;
+  ReplayWindow motorReplay_, rgbReplay_;
+  RadioAckTracker rgbAck_;
+  SecureRgbHandler rgbHandler_=nullptr;
+  SecureMotorStatus rgbStatus_=SecureMotorStatus::Idle;
+  uint32_t rgbSequence_=0, lastRgb_=0, rgbStarted_=0;
+  bool lastRgbAccepted_=false;
   SecureMotorHandler motorHandler_=nullptr;
   SecureMotorStatus motorStatus_=SecureMotorStatus::Idle, lastMotorResult_=SecureMotorStatus::Unavailable;
   uint32_t motorSequence_=0, lastMotorRequest_=0, motorStarted_=0;

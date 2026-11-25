@@ -2,7 +2,14 @@
 #include <stdint.h>
 #include "gesture_manager.h"
 constexpr uint8_t DEBUG_SPHERE_MOTOR_PAGE = 12;
-constexpr uint8_t DEBUG_PAGE_COUNT = DEBUG_SPHERE_MOTOR_PAGE+1;
+constexpr uint8_t DEBUG_SPHERE_RGB_PAGE = DEBUG_SPHERE_MOTOR_PAGE+1;
+constexpr uint8_t DEBUG_PAGE_COUNT = DEBUG_SPHERE_RGB_PAGE+1;
+struct DebugSphereRgb {
+  uint8_t id=1, brightness=50, color=0;
+  bool unavailable=false;
+};
+const DebugSphereRgb &debugSphereRgb();
+bool debugSphereRgbTap(const GestureEvent &event);
 constexpr int16_t DEBUG_SPHERE_MOTOR_X=82, DEBUG_SPHERE_MOTOR_Y=220;
 constexpr int16_t DEBUG_SPHERE_MOTOR_WIDTH=302, DEBUG_SPHERE_MOTOR_HEIGHT=44;
 inline bool debugSphereMotorTap(const GestureEvent &event) {

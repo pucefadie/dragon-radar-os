@@ -38,6 +38,7 @@ SecureEspNow secure(secureTx);
 bool secureReady=false;
 #if CONFIG_IDF_TARGET_ESP32S3
 SphereSearch sphereSearch;
+uint8_t pendingFoundRgb=0;
 void observeProximity(uint8_t id, SecureRxEvent event, int8_t rssi, uint32_t received) {
   if (event==SecureRxEvent::SessionStarted) sphereSearch.invalidate(id);
   else if (event==SecureRxEvent::ProbeAck) sphereSearch.sample(id,rssi,received,millis());
@@ -134,8 +135,15 @@ void beaconServiceUpdate() {
     const uint32_t now=millis();
 #if CONFIG_IDF_TARGET_ESP32S3
     secure.tick(now, observeProximity);
-    for (uint8_t id=1; id<=SphereSearch::count; ++id)
-      if (secure.linkStatus(now,id)!=SecureLinkStatus::Paired) sphereSearch.invalidate(id);
+    for (uint8_t id=1; id<=SphereSearch::count; ++id) {
+      const uint8_t bit=1u<<(id-1);
+      if (secure.linkStatus(now,id)!=SecureLinkStatus::Paired) {
+        sphereSearch.invalidate(id);
+        pendingFoundRgb &= ~bit;
+      } else if ((pendingFoundRgb&bit) && secure.requestRgb(now,id,rgbCommand(RgbAction::Found))) {
+        pendingFoundRgb &= ~bit;
+      }
+    }
 #else
     secure.tick(now);
 #endif
@@ -183,6 +191,7 @@ bool beaconServiceSelectSphere(uint8_t id) {
 void beaconServiceNewGame() {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   sphereSearch.newGame();
+  pendingFoundRgb=0;
 #endif
 }
 
@@ -196,7 +205,7 @@ ProximitySnapshot beaconServiceProximity() {
 void beaconServiceSetProximitySuspended(bool suspended) {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   sphereSearch.setSuspended(suspended,millis());
-  if (suspended) secure.cancelMotorRequest();
+  if (suspended) { pendingFoundRgb=0; secure.cancelMotorRequest(); }
 #else
   (void)suspended;
 #endif
@@ -218,6 +227,32 @@ void beaconServiceRequestSphereMotor() {
     secure.requestMotor(millis());
 #endif
   }
+#endif
+}
+
+bool beaconServiceRequestRgb(uint8_t id,uint32_t command) {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  return secureReady && secure.requestRgb(millis(),id,command);
+#else
+  (void)id;
+  (void)command;
+  return false;
+#endif
+}
+
+SecureMotorStatus beaconServiceRgbStatus(uint8_t id) {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (secureReady) return secure.rgbStatus(id);
+#else
+  (void)id;
+#endif
+  return SecureMotorStatus::Unavailable;
+}
+
+void beaconServiceSphereFoundFeedback() {
+  beaconServiceRequestSphereMotor(); // Kept for M3b spheres; RGB does not trigger the motor.
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  if (const uint8_t id=sphereSearch.selected()) pendingFoundRgb |= 1u<<(id-1);
 #endif
 }
 

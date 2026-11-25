@@ -396,8 +396,66 @@ static void testSevenSpheres() {
   assert(radar[2]->state(28500)==LinkState::Paired && radar[2]->confirmations()>1);
 }
 
+static unsigned rgbCalls;
+static bool rgbTestHandler(uint32_t command,uint32_t) {
+  assert(command==rgbCommand(RgbAction::Found));
+  ++rgbCalls;
+  return true;
+}
+
+static void testRgbCommand() {
+  const uint8_t radarMac[6]{2}, sphereMac[6]{4}, otherMac[6]{6};
+  Wire radarWire(20), sphereWire(50);
+  SecureRadio radar(radarWire,true,make(4)), sphere(sphereWire,false,make(2));
+  const uint32_t found=rgbCommand(RgbAction::Found);
+  auto toSphere=[&](const Frame &f,uint32_t t){sphere.receive(radarMac,f.data(),f.size(),t);};
+  auto toRadar=[&](const Frame &f,uint32_t t){radar.receive(sphereMac,f.data(),f.size(),t);};
+  assert(!radar.requestRgb(0,found));
+  radar.tick(0);
+  toSphere(radarWire.take(),1);
+  toRadar(sphereWire.take(),2);
+  radar.tick(2);
+  toSphere(radarWire.take(),3);
+  toRadar(sphereWire.take(),4);
+  assert(!radar.requestRgb(10,rgbCommand(RgbAction::On,101)));
+  assert(radar.requestRgb(10,found));
+  radar.tick(11);
+  auto legacy=radarWire.take();
+  assert(legacy[4]==9);
+  auto probe=radarWire.take();
+  toSphere(legacy,12);
+  toRadar(sphereWire.take(),13);
+  assert(radar.rgbStatus()==SecureMotorStatus::Unavailable);
+  toSphere(probe,14);
+  toRadar(sphereWire.take(),15);
+  sphere.setRgbHandler(rgbTestHandler);
+  assert(radar.requestRgb(20,found));
+  radar.tick(21);
+  const auto request=radarWire.take();
+  auto forged=request;
+  forged[79]^=1;
+  toSphere(forged,22);
+  sphere.receive(otherMac,request.data(),request.size(),23);
+  assert(sphereWire.queue.empty() && rgbCalls==0);
+  toSphere(request,24);
+  const auto result=sphereWire.take();
+  radar.tick(471);
+  assert(radarWire.take()==request);
+  toSphere(request,472);
+  assert(sphereWire.take()==result && rgbCalls==1);
+  toRadar(result,473);
+  assert(radar.rgbStatus()==SecureMotorStatus::Accepted && radar.confirmations()==1);
+  assert(radar.requestRgb(500,found));
+  radar.tick(501);
+  toSphere(radarWire.take(),502);
+  toRadar(sphereWire.take(),503);
+  toSphere(request,504);
+  assert(sphereWire.queue.empty() && rgbCalls==2);
+}
+
 int main() {
   testSevenSpheres();
+  testRgbCommand();
   testMotorCommand();
   testRecords();
 #if M1C_BENCH_FIXTURE
