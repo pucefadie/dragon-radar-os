@@ -467,3 +467,10 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
   - C6 v311 recupero USB OTA0, 1.056.432 byte, SHA-256 `84006a3db35182a33d531012c5d8aa738af9bc918932f2931d98d47d1beec6d9`.
   - C6 v312 OTA, 1.056.432 byte, SHA-256 `5b330732213862814f4294b054b2592925fa8cd64f8d2a7319ba0ea04468947d`.
   - C6 v313 fixture privata, 1.056.208 byte, SHA-256 `4c3abf1d0efd3c95a5ebe145044d782937768300db68a1bff4cbc229fedc00e7`.
+
+### M3e.1 — recupero v311 sul C6 ID 1
+
+- **PASS preflight, scrittura e readback.** Su COM12 con sola USB, motore, LED e batteria scollegati per conferma dell’operatore. Ripristinati solo `0x9000–0x9fff` e app v311 da 1.056.432 byte a `0x10000` con fine dei settori scritti a `0x111fff`. Prima dell’avvio il dump intero coincide con la ricostruzione attesa e la NVS con i due originali. Bootloader, tabella, otadata, OTA1 e coredump preservati.
+- **FAIL montaggio NVS a v311.** Quattro campioni identici: `init=259 open=259 key=259 read=259 valid=0 version=0 blocked=1 unlocked=0 first_op=3 first_phase=1 first_address=009000 first_pc=42020160`. `nvs_flash_init()` ha propagato `ESP_ERR_INVALID_STATE` restituito dalla barriera. Apertura, ricerca e lettura non sono state chiamate, i relativi 259 sono valori di stato iniziale. Il PC nell’ELF risolve a `nvs::Page::erase()`, in `nvs_page.cpp:1063`. Il tentativo precede Wi-Fi, Preferences e `secure.begin()`. È dimostrato il punto della cancellazione tentata, resta da isolare perché il mount selezioni proprio quella pagina.
+- **PASS protezione e integrità dopo boot.** Rilettura ROM: i 20.480 byte di NVS sono identici all’originale. Parser logico, namespace e DRC1 integri. Luminosità invariata (nessun record salvato nei dump). Zero variazioni PHY. Tabella e otadata confermate immutate. C6 lasciato in ROM con stub RAM.
+- **NOT RUN** avvio ESP-NOW, RGB, `ota_start`, AP e v312. La barriera ha impedito di arrivare alla radio. Gli attuatori e i LED erano scollegati, quindi manca anche l’osservazione RGB. Nessun OTA o rollback intenzionale. S3 invariato.
