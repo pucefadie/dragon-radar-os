@@ -116,7 +116,13 @@ static uint32_t rgbInitAt=0;
 #include "sphere_ota.h"
 #include "sphere_nvs_guard.h"
 static SphereOta maintenance;
-static void otaConsole(char c) { maintenance.usb(c,millis()); }
+static void otaConsole(char c) {
+#if !SPHERE_OTA_NVS_TRACE
+  maintenance.usb(c,millis());
+#else
+  (void)c;
+#endif
+}
 #endif
 static uint32_t rgbRendered=0xffffffff;
 
@@ -236,7 +242,7 @@ void setup() {
     if (secureReady) {
       beginRgb();
       secure.setRgbHandler(handleRgb);
-#if SPHERE_OTA
+#if SPHERE_OTA && !SPHERE_OTA_NVS_TRACE
       otaHealthy=rgbReady && maintenance.begin(secure);
       if (otaHealthy) sphereNvsUnlock();
 #endif

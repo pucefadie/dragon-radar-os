@@ -44,9 +44,17 @@ if [[ "$role" == ota ]]; then
   cp "$project/examples/$sketch/"{sphere_ota,sphere_nvs_guard}.h "$stage/"
   wrap+=",--wrap=esp_partition_write,--wrap=esp_partition_write_raw,--wrap=esp_partition_erase_range"
 fi
+trace="${SPHERE_OTA_NVS_TRACE:-0}"
+if [[ "$trace" == 1 && "$ota" == 1 ]]; then
+  cp "$project/examples/$sketch/sphere_nvs_trace.h" "$stage/"
+  wrap+=",--wrap=esp_partition_read_raw,--wrap=_ZN3nvs4Page4loadEPNS_9PartitionEm,--wrap=_ZNK3nvs4Page12getSeqNumberERm,--wrap=_ZN3nvs4Page5eraseEv"
+elif [[ "$trace" != 0 ]]; then
+  printf '%s\n' 'SPHERE_OTA_NVS_TRACE=1 requires the OTA role' >&2
+  exit 2
+fi
 cli="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 "$cli" compile --fqbn 'esp32:esp32:XIAO_ESP32C6:PartitionScheme=no_ota,CDCOnBoot=cdc' \
-  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision -DSPHERE_RGB_STARTUP_WHITE=$white -DSPHERE_OTA=$ota -DSPHERE_OTA_VERSION=$version" \
+  --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=0 -DM1C_C6_NVS_GUARD=1 -DM1C_C6_PROVISION=$provision -DSPHERE_RGB_STARTUP_WHITE=$white -DSPHERE_OTA=$ota -DSPHERE_OTA_VERSION=$version -DSPHERE_OTA_NVS_TRACE=$trace" \
   --build-property "compiler.c.elf.extra_flags=$wrap" \
   --jobs 4 --build-path "$(wslpath -w "$stage_root/cache")" \
   --output-dir "$(wslpath -w "$stage_root/artifacts")" "$(wslpath -w "$stage")" < /dev/null

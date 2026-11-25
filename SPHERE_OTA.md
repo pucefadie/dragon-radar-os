@@ -73,3 +73,27 @@ Per il **solo C6 già migrato**, attendere autorizzazione alle due scritture seg
 ### Risultato del recupero v311
 
 Il recupero del solo settore a `0x9000` e di OTA0 ha superato il readback. Al mount successivo la barriera ha intercettato una cancellazione di `0x9000` da `nvs::Page::erase()`, PC `0x42020160`, prima di Wi-Fi e dell’apertura del record DRA1. L’intera NVS è rimasta identica dopo il primo avvio. La sfera è in ROM e v312 resta sospesa. Una nuova sessione dovrà localizzare il percorso che porta `PageManager` a cancellare il settore, confrontando le letture delle intestazioni dal firmware e dalla ROM e l’esito di classificazione a runtime. Conservare la barriera per quella prova. Il ripristino di `0x9000` è già riuscito e va ripetuto solo se un nuovo readback lo richiede.
+
+## M3e.2 — riproduzione del mount e diagnosi sul C6
+
+Il pacchetto Arduino ESP32 3.3.12 identifica il proprio SDK come ESP-IDF v5.5.5, commit `b774170ff46`. Il banco host compila `Page`, `PageManager`, `Storage` e i tipi NVS da quel commit. Emula soltanto flash, logging e CRC ROM (zlib con lo stesso seed). Il backend rifiuta e conta scritture e cancellazioni. Il test accetta un blob privato di riferimento e confronta tutti i 76 byte DRC1 senza stamparli.
+
+```sh
+tests/nvs_mount/run.sh /percorso/esp-idf-v5.5.5 /percorso/privato/nvs-originale.bin /percorso/privato/sphere.bin
+```
+
+### Catena e risultati
+
+`nvs_flash_init()` individua il descrittore della partizione e il manager costruisce `Storage`. `Storage::init()` chiama `PageManager::load()` prima di caricare namespace e indici blob. `Page::load()` legge l’header da 32 byte, verifica CRC sui byte 4–27 e versione. Per le pagine in uso legge bitmap e slot; per un header vuoto verifica che la pagina sia tutta cancellata. `PageManager::load()` separa le pagine con sequenza valida dalle pagine libere e ordina per sequenza. La riparazione di duplicati e il completamento di una pagina FREEING avvengono in questo percorso. La raccolta ordinaria su richiesta di spazio avviene in `requestNewPage()`. Se durante il mount nessuna pagina ha sequenza valida, `activatePage()` parte da zero e cancella la prima pagina disponibile se classificata CORRUPT. Dopo il mount, `Storage` confronta indici e chunk e gestisce blob orfani. [Codice ESP-IDF v5.5.5](https://github.com/espressif/esp-idf/blob/b774170ff46c393eeb5e495ea37936038d3f4f4f/components/nvs_flash/src/nvs_pagemanager.cpp) · [Formato NVS](https://docs.espressif.com/projects/esp-idf/en/release-v5.5/esp32c6/api-reference/storage/nvs_flash.html)
+
+- **Originale su driver host:** Full/0, Empty, Active/20, Full/6, Full/19. Corrisponde al parser offline. Mount riuscito, zero mutazioni, apertura namespace riuscita e DRC1 identico. Una NVS rigenerata non è giustificata da questi dati.
+- **Dump v301 sul driver host:** mount e lettura di DRC1 riusciti anche con due pagine Active. Il parser forense rifiuta invece l’insieme dei record con namespace orfani. Il successo del driver non certifica che tutti i record di sistema siano recuperati.
+- **Controlli di isolamento:** corrompere soltanto il CRC della prima pagina nella copia host non produce l’erase osservato. Rendere anche invisibili le altre tre pagine con sequenza valida riproduce `erase offset=0`, un solo tentativo e mount 259 con barriera attiva. È una riproduzione della firma del guasto, non una misura delle letture sul C6.
+
+Le app M3d e M3e.1 collegano la stessa libreria Arduino `libnvs_flash.a`. Le routine centrali NVS esaminate coincidono tra 5.5.4 e 5.5.5. Entrambi i bootloader letti dagli artefatti dichiarano flash DIO, 80 MHz, 4 MiB. Il loader dedicato differisce dal precedente come binario e resta da verificare il comportamento concreto delle letture a runtime; gli header non dimostrano che controller, cache e percorsi di accesso restituiscano gli stessi dati.
+
+### Una sola sessione strumentata da autorizzare
+
+La build USB di diagnosi si prepara con `SPHERE_OTA_NVS_TRACE=1 SPHERE_OTA_VERSION=321 scripts/build_m1c_c6.sh ota build/c6-trace 1`. La barriera resta chiusa per tutta la sessione e il candidato non apre l’AP. Registra gli header realmente letti durante il mount, i risultati di `Page::load()` e `getSeqNumber()` e il PC del chiamante di `Page::erase()`. Dopo il mount confronta `esp_partition_read_raw`, `esp_flash_read` e mappatura CPU, con CRC ROM e software. Log privati.
+
+Dopo autorizzazione, verificare via ROM che NVS sia ancora identica. Scrivere soltanto la v321 in OTA0 a `0x10000`, fare readback e acquisire la traccia di un solo avvio. Rileggere la NVS e lasciarla intatta. Se le letture divergono, risalire al percorso di lettura o alla configurazione flash; se coincidono, usare classificazioni e PC per verificare il ramo interno specifico. Nessuna scrittura di `0x9000` necessaria con lo stato attuale. OTA v312 e rollback v313 restano sospesi.

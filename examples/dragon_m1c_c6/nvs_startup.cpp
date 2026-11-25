@@ -8,6 +8,9 @@
 #include <atomic>
 #include "secure_radio.h"
 #include "sphere_nvs_guard.h"
+#if SPHERE_OTA_NVS_TRACE
+#include "sphere_nvs_trace.h"
+#endif
 #ifndef DRAGON_BALL_ID
 #include "beacon_config.h"
 #endif
@@ -79,7 +82,14 @@ static void inspectNvs() {
   const auto *partition=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_NVS,"nvs");
   if (!partition || partition->address!=0x9000 || partition->size!=0x5000) return;
   nvsPhase.store(1);
+#if SPHERE_OTA_NVS_TRACE
+  sphereNvsTrace::recordingMount=true;
+#endif
   initResult=nvs_flash_init();
+#if SPHERE_OTA_NVS_TRACE
+  sphereNvsTrace::recordingMount=false;
+  sphereNvsTrace::read(partition);
+#endif
   if (initResult!=ESP_OK) return;
   nvs_handle_t storage;
   nvsPhase.store(2);
@@ -95,7 +105,11 @@ static void inspectNvs() {
 }
 
 bool sphereNvsReady() { return recordValid; }
-void sphereNvsUnlock() { if (recordValid) nvsUnlocked.store(true); }
+void sphereNvsUnlock() {
+#if !SPHERE_OTA_NVS_TRACE
+  if (recordValid) nvsUnlocked.store(true);
+#endif
+}
 void sphereNvsPrint(Stream &out) {
   const uint32_t mutation=firstMutation.load();
   out.printf("M3E_NVS init=%d open=%d key=%d read=%d valid=%u version=%u blocked=%u unlocked=%u first_op=%u first_phase=%u first_address=%06lx first_pc=%08lx\n",
@@ -103,6 +117,9 @@ void sphereNvsPrint(Stream &out) {
       unsigned(recordVersion),blockedMutations.load(),unsigned(nvsUnlocked.load()),
       unsigned(mutation>>28),unsigned((mutation>>24)&15),
       (unsigned long)(mutation&0xffffff),(unsigned long)firstCaller.load());
+#if SPHERE_OTA_NVS_TRACE
+  sphereNvsTrace::print(out);
+#endif
 }
 
 static esp_timer_handle_t bootDeadline;
