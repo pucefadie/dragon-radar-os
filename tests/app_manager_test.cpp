@@ -1,6 +1,16 @@
 #include "app_manager.h"
 #include <cassert>
 int main() {
+  GestureEvent motorTap;
+  motorTap.type=Gesture::Tap;
+  motorTap.x=DEBUG_SPHERE_MOTOR_X;
+  motorTap.y=DEBUG_SPHERE_MOTOR_Y;
+  assert(debugSphereMotorTap(motorTap));
+  motorTap.type=Gesture::Hold;
+  assert(!debugSphereMotorTap(motorTap));
+  motorTap.type=Gesture::Tap;
+  motorTap.y=355;
+  assert(!debugSphereMotorTap(motorTap));
   AppManager a;
   assert(a.active() == AppId::Radar && !a.launcherOpen());
   GestureEvent e; e.type = Gesture::SwipeUp; e.x = 230; e.y = 420; a.gesture(e);

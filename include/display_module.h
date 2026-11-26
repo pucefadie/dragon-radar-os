@@ -189,6 +189,7 @@ struct RadarSystemSnapshot {
   uint8_t gps_status = RADAR_GPS_UNREACHABLE; // 0=UNREACH, 1=NO DATA, 2=NO FIX, 3=3D FIX
   bool gps_i2c_online = false;
   bool gps_fix_valid = false;
+  bool gps_uart_active = false, gps_ever_had_fix = false;
   uint8_t gps_fix_quality = 0;
   uint8_t gps_sats_in_use = 0;
   uint8_t gps_sats_in_view = 0;

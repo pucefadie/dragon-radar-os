@@ -1,22 +1,9 @@
-# Stato snapshot pulito Dragon Radar OS v0.3
+# Dragon Radar OS — ripresa M1c
 
-Questo repository è una copia Git indipendente, senza la cronologia locale diagnostica. La cronologia completa e i backup restano nella directory privata locale originale.
+Branch `feat/espnow-m1-bidirectional`, [PR #2 draft](https://github.com/pucefadie/dragon-radar-os/pull/2). Baseline M1b `a43bfe7`, baseline piano M1c `bbfd0ae`. Leggere [STATUS.md](STATUS.md) per i risultati correnti e la [revisione AI #3](https://github.com/pucefadie/dragon-radar-os/issues/3#issuecomment-6991603548) per i rilievi sul preflight. Gli appunti di banco, i log e i dump restano privati.
 
-## Stato software
-
-- Build S3 dalla directory pulita: riuscita con Arduino ESP32 Core 3.3.12; 1.768.859 byte app su 3.145.728, 71.100 byte globali.
-- Build C6 dalla directory pulita: riuscita con Arduino ESP32 Core 3.x; 961.914 byte app su 1.310.720, 41.616 byte globali.
-- Protocollo locale v0.3: frame binario con CRC e enum messaggi; gli sketch radio del pacchetto di integrazione sono da valutare prima di sostituire il framing già presente.
-- S3 riceve beacon ESP-NOW con MAC/RSSI; esempio XIAO trasmette beacon.
-- Test host presenti per frame, registro beacon e prossimità.
-- Pairing autenticato, provisioning LMK, cifratura unicast, ACK/retry end-to-end e telemetria batteria restano incompleti.
-- Test host frame/CRC, registro, prossimità e matematica radar: passati. Nessun test radio fisico o flash è stato eseguito in questo snapshot.
-
-## Avvio lavoro
-
-```bash
-./scripts/build.sh full
-./scripts/build_beacon.sh 1 4 esp32:esp32:XIAO_ESP32C6
-```
-
-Per la radio, verificare che entrambe le schede usino lo stesso canale e che l'antenna U.FL sia collegata. Nessun RSSI indica distanza o bearing. Prima del collaudo unicast implementare pairing e chiavi; CRC e MAC non autenticano il mittente.
+- **M1b software:** DRA1 con peer ESP-NOW cifrato, handshake HMAC e anti-replay, probe e ACK applicativo per ID 1. La build standard carica un record NVS fornito deliberatamente via utility USB separata. DEV resta diagnostico e non autenticato. I test host e le build non provano il driver sul banco.
+- **Evidenza fisica storica:** i primi tentativi con radar diagnostico non rilevarono beacon. Il successivo ricevitore minimale S3 sul canale 6 confermò 10 beacon DRB2 e conservò la NVS byte per byte. Alla fine OTA1 risultava selezionato e OTA0 integro. Non assumere lo stesso stato alla prossima connessione. L'ultima app C6 osservata era DEV, ID 1, canale 6, antenna interna.
+- **Preflight M1c:** il C6 ha un solo slot `no_ota` e due catture USB integrali identiche. Sul S3 l'ingresso manuale in ROM è riuscito con sola USB e attuatori isolati. OTA0 è originale e OTA1 è selezionato con seq 4 VALID. Vedere STATUS per le doppie letture e il piano di ritorno. I backup restano locali e vanno riverificati se si avvia l'app prima dell'installazione. Il primo avvio della build S3 protetta richiede approvazione per la configurazione effettiva.
+- **Banco M1c:** in una sessione autorizzata sono stati programmati OTA1 S3 e app0 C6 e sono state scritte le associazioni temporanee. Il profilo PMK comune derivata ha superato handshake, ACK/retry, tag errato, replay, cambio canale e riavvio. Leggere [STATUS.md](STATUS.md) per lo stato finale e le verifiche aperte. La strategia di recupero e la confidenzialità a riposo sono in [M1C_BENCH_TEST.md](M1C_BENCH_TEST.md) e [SECURITY_PLAN.md](SECURITY_PLAN.md).
+- **Ripresa M1d:** il prossimo collaudo usa i DRC1 già presenti con le immagini radio protette e senza fixture. Richiede una nuova autorizzazione hardware. La generazione di una coppia reale DRC2 e il provisioning coordinato sono una fase successiva.

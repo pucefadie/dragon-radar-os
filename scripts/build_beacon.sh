@@ -8,16 +8,22 @@ fi
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WIN_TEMP_DIR="$(powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d "\r")"
 ROOT="$(wslpath -u "$WIN_TEMP_DIR")/dragon_beacon_build"
+# Opt-in isolation keeps previous S3/C6 build snapshots and staging untouched.
+if [[ -n "${DRAGON_BEACON_OUTPUT:-}" ]]; then
+  [[ ! -e "$DRAGON_BEACON_OUTPUT" ]] || { echo "Output already exists" >&2; exit 2; }
+  ROOT="$(mktemp -d "$(wslpath -u "$WIN_TEMP_DIR")/dragon_beacon_build-XXXXXX")"
+fi
 STAGE="${ROOT}/dragon_ball_beacon"
 CACHE="${ROOT}/cache"
-OUT="${PROJECT_DIR}/build/beacon-$1"
+OUT="${DRAGON_BEACON_OUTPUT:-${PROJECT_DIR}/build/beacon-$1}"
+[[ "$OUT" = /* ]] || OUT="$PWD/$OUT"
 WIN_OUT="${ROOT}/out-$1"
 CLI="/mnt/c/Program Files/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 mkdir -p "$STAGE" "$CACHE" "$OUT" "$WIN_OUT"
-cp "$PROJECT_DIR/examples/dragon_ball_beacon/dragon_ball_beacon.ino" "$STAGE/"
-cp "$PROJECT_DIR/include/beacon_protocol.h" "$PROJECT_DIR/src/beacon_protocol.cpp" "$STAGE/"
+cp "$PROJECT_DIR/examples/dragon_ball_beacon/"dragon_ball_beacon.ino "$PROJECT_DIR/examples/dragon_ball_beacon/"{dra1_user_led,sphere_motor,sphere_motor_gpio,sphere_motor_rmt,sphere_rgb}.h "$STAGE/"
+cp "$PROJECT_DIR/include/beacon_protocol.h" "$PROJECT_DIR/src/beacon_protocol.cpp" "$PROJECT_DIR/include/dev_radio_tx.h" "$PROJECT_DIR/include/dev_radio.h" "$PROJECT_DIR/src/dev_radio.cpp" "$PROJECT_DIR/include/radio_link.h" "$PROJECT_DIR/src/radio_link.cpp" "$PROJECT_DIR/src/secure_radio.cpp" "$PROJECT_DIR/include/secure_radio.h" "$PROJECT_DIR/include/secure_radio_espnow.h" "$STAGE/"
 printf '#pragma once\n#define DRAGON_BALL_ID %d\n#define DRAGON_RADIO_CHANNEL %d\n' "$1" "$2" > "$STAGE/beacon_config.h"
 cd "$ROOT"
-"$CLI" compile --fqbn "$3" --jobs 4 --build-path "$(wslpath -w "$CACHE")" --output-dir "$(wslpath -w "$WIN_OUT")" "$(wslpath -w "$STAGE")" < /dev/null
+"$CLI" compile --build-property "compiler.cpp.extra_flags=-DRADIO_DEV_INSECURE=${RADIO_DEV_INSECURE:-0}" --fqbn "$3" --jobs 4 --build-path "$(wslpath -w "$CACHE")" --output-dir "$(wslpath -w "$WIN_OUT")" "$(wslpath -w "$STAGE")" < /dev/null
 
 cp -f "$WIN_OUT"/* "$OUT"/

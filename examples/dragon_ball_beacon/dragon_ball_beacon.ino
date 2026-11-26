@@ -1,12 +1,31 @@
 // Experimental Dragon Radar beacon. Broadcast frames are NOT authenticated.
 // Configure a unique ID (1..7) and the radar's current Wi-Fi channel.
-// No pins, battery divider, sleep or ranging hardware assumed.
+// The XIAO profile uses the onboard USER LED and RF switch.
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_now.h>
 #include <esp_system.h>
 #include "beacon_protocol.h"
 #include "beacon_config.h"
+#include "dev_radio.h"
+#if RADIO_DEV_INSECURE
+#include "dev_radio_tx.h"
+#else
+#include "secure_radio_espnow.h"
+#endif
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#ifndef RADIO_DEV_INSECURE
+#define RADIO_DEV_INSECURE 0
+#endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
+#include <driver/gpio.h>
+#include "dra1_user_led.h"
+static_assert(LED_BUILTIN == 15 && LED_BUILTIN != WIFI_ENABLE && LED_BUILTIN != WIFI_ANT_CONFIG,
+              "XIAO C6 USER LED pin does not match board profile");
+static constexpr gpio_num_t kUserLedPin = GPIO_NUM_15;
+static Dra1UserLed userLed;
+#endif
 #ifndef DRAGON_BALL_ID
 #define DRAGON_BALL_ID 1
 #endif
@@ -19,11 +38,167 @@
 #if DRAGON_RADIO_CHANNEL < 1 || DRAGON_RADIO_CHANNEL > 13
 #error DRAGON_RADIO_CHANNEL must be between 1 and 13 and legal for your region
 #endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE && ARDUINO_USB_CDC_ON_BOOT
+#define SPHERE_MOTOR_USB_TEST 1
+#include "sphere_motor_rmt.h"
+#include "sphere_rgb.h"
+static_assert(D4 == kSphereMotorPin && D5 == sphereRgb::kChain.dataPin,
+              "XIAO C6 motor/RGB pins do not match board profile");
+static_assert(D4 != LED_BUILTIN && D4 != WIFI_ENABLE && D4 != WIFI_ANT_CONFIG &&
+              D5 != LED_BUILTIN && D5 != WIFI_ENABLE && D5 != WIFI_ANT_CONFIG && D4 != D5, "Actuator configuration conflicts with XIAO hardware");
+static SphereMotorRmt motorOutput;
+static SphereMotor<SphereMotorRmt> motor(motorOutput);
+static MotorTestCommand motorCommand;
+#if SPHERE_OTA
+static void otaConsole(char c);
+#endif
+
+static SecureMotorStatus requestRemoteMotor(uint32_t now) {
+  switch (motor.request(now)) {
+    case MotorTestResult::Started: return SecureMotorStatus::Accepted;
+    case MotorTestResult::Busy:
+    case MotorTestResult::CoolingDown: return SecureMotorStatus::CoolingDown;
+    case MotorTestResult::Disabled: return SecureMotorStatus::Unavailable;
+  }
+  return SecureMotorStatus::Unavailable;
+}
+
+static void pollMotorConsole() {
+  if (!Serial) {
+    motorCommand.reset();
+    return;
+  }
+  for (unsigned budget = 32; budget && Serial.available(); --budget) {
+    const char c=char(Serial.read());
+#if SPHERE_OTA
+    otaConsole(c);
+#endif
+    if (!motorCommand.consume(c)) continue;
+    const auto result = motor.request(millis());
+    switch (result) {
+      case MotorTestResult::Started: Serial.println("MOTOR_TEST STARTED 120 ms"); break;
+      case MotorTestResult::Busy:
+      case MotorTestResult::CoolingDown: Serial.println("MOTOR_TEST WAIT"); break;
+      case MotorTestResult::Disabled: Serial.println("MOTOR_TEST DISABLED"); break;
+    }
+  }
+}
+#endif
+#if RADIO_DEV_INSECURE
+struct DevPacket { uint8_t mac[6], bytes[RADIO_FRAME_SIZE]; int8_t rssi; };
+static QueueHandle_t devQueue;
+static DevRadioTx radioTx;
+static void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { radioTx.completed(status); }
+class DevAdapter : public DevRadioTransport { public: bool send(const uint8_t *mac,const uint8_t *data) override {
+ bool ok=radioTx.enqueue(mac,data);RadioFrame f{};radioDecode(data,RADIO_FRAME_SIZE,f);Serial.printf("[DEV INSECURE] queued=%d type=%s id=%u seq=%lu\n",ok,devMessageName(f.type),f.id,(unsigned long)f.sequence);return ok;
+}};
+static DevAdapter devAdapter; static DevSphere *devSphere;
+static void devReceive(const esp_now_recv_info_t *info,const uint8_t *data,int len) { if (!devQueue || !info || !info->src_addr || !data || len!=RADIO_FRAME_SIZE) return; DevPacket p; memcpy(p.mac,info->src_addr,6); memcpy(p.bytes,data,RADIO_FRAME_SIZE); p.rssi=info->rx_ctrl?info->rx_ctrl->rssi:0; xQueueSend(devQueue,&p,0); }
+#else
+static DevRadioTx radioTx;
+static SecureEspNow secure(radioTx);
+static void txDone(const esp_now_send_info_t *,esp_now_send_status_t status) { radioTx.completed(status); }
+static void secureReceive(const esp_now_recv_info_t *info,const uint8_t *bytes,int len) { secure.enqueue(info,bytes,len); }
+#endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
+#include <Preferences.h>
+#include "sphere_rgb.h"
+#include <esp32-hal-rmt.h>
+// Full-white startup is a 500 ms bench load test. Disable only for comparison builds.
+#ifndef SPHERE_RGB_STARTUP_WHITE
+#define SPHERE_RGB_STARTUP_WHITE 1
+#endif
+static sphereRgb::Animation rgb;
+static rmt_data_t rgbFrame[49];
+static bool rgbReady=false, rgbStarted=false;
+static uint32_t rgbInitAt=0;
+#if SPHERE_OTA
+#include "sphere_ota.h"
+#include "sphere_nvs_guard.h"
+static SphereOta maintenance;
+static void otaConsole(char c) {
+#if !SPHERE_OTA_NVS_TRACE
+  maintenance.usb(c,millis());
+#else
+  (void)c;
+#endif
+}
+#endif
+static uint32_t rgbRendered=0xffffffff;
+
+static void renderRgb(sphereRgb::Color c) {
+  const uint32_t packed=(uint32_t(c.g)<<16)|(uint32_t(c.r)<<8)|c.b;
+  if (packed==rgbRendered || !rmtTransmitCompleted(sphereRgb::kChain.dataPin)) return;
+  for (unsigned i=0;i<48;++i) {
+    const bool bit=packed & (1u<<(23-i%24));
+    rgbFrame[i].level0=1;
+    rgbFrame[i].duration0=bit?16:7;
+    rgbFrame[i].duration1=bit?9:18;
+  }
+  rgbFrame[48].duration0=rgbFrame[48].duration1=3500;
+  if (rmtWriteAsync(sphereRgb::kChain.dataPin,rgbFrame,49)) rgbRendered=packed;
+}
+
+static uint32_t handleRgb(uint32_t command,uint32_t now) {
+  const auto action=RgbAction(command>>10);
+#if SPHERE_OTA
+  if (action>=RgbAction::OtaInfo) return maintenance.command(action,now);
+#else
+  if (action>=RgbAction::OtaInfo) return 4;
+#endif
+  if (!rgbStarted) return 4;
+  if (action==RgbAction::Found) {
+    rgb.found(now);
+    return 2;
+  }
+  const uint8_t brightness=command&127;
+  if (brightness!=rgb.brightness()) {
+    Preferences store;
+    if (!store.begin("sphere_rgb") || store.putUChar("brightness",brightness)!=1) return 4;
+  }
+  rgb.manual(action==RgbAction::On,(command>>7)&7,brightness,now);
+  return 2;
+}
+
+static void beginRgb() {
+  const int pin=sphereRgb::kChain.dataPin;
+  rgbReady=rmtInit(pin,RMT_TX_MODE,RMT_MEM_NUM_BLOCKS_1,20000000) && rmtSetEOT(pin,LOW);
+  if (!rgbReady) return;
+  Preferences store;
+  if (store.begin("sphere_rgb",true)) rgb.setBrightness(store.getUChar("brightness",50));
+  rgbInitAt=millis();
+
+}
+#endif
 static const uint8_t broadcastMac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 static bool ready=false;
-static uint32_t bootId=0, sequence=0, last=0;
+static uint32_t bootId=0, sequence=0, nextBeacon=0;
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+static bool otaHealthy=false;
+struct BootVerification {
+  ~BootVerification() { SphereOta::finishBoot(otaHealthy); }
+};
+#endif
 void setup() {
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  BootVerification verify;
+#endif
+#if SPHERE_MOTOR_USB_TEST
+  const bool motorLow = sphereMotorSafeLow();
+#endif
+#if defined(ARDUINO_XIAO_ESP32C6) && !RADIO_DEV_INSECURE
+  // Preload the inactive level before enabling the active-low output.
+  gpio_set_level(kUserLedPin, HIGH);
+  pinMode(kUserLedPin, OUTPUT);
+  gpio_sleep_set_direction(kUserLedPin, GPIO_MODE_INPUT);
+  gpio_sleep_set_pull_mode(kUserLedPin, GPIO_PULLUP_ONLY);
+  gpio_sleep_sel_en(kUserLedPin);
+#endif
   Serial.begin(115200);
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  sphereNvsPrint(Serial);
+  if (!sphereNvsReady()) return;
+#endif
 #if defined(ARDUINO_XIAO_ESP32C6)
   // Seeed XIAO ESP32-C6: enable RF switch, then select external U.FL antenna.
   // Use only with the antenna connected. GPIO3/14 are dedicated to this switch.
@@ -32,6 +207,9 @@ void setup() {
   pinMode(WIFI_ANT_CONFIG,OUTPUT); digitalWrite(WIFI_ANT_CONFIG,HIGH);
 #endif
   WiFi.mode(WIFI_STA);
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  if (esp_wifi_set_storage(WIFI_STORAGE_RAM)!=ESP_OK) return;
+#endif
   WiFi.disconnect(false, false);
   if (esp_wifi_set_channel(DRAGON_RADIO_CHANNEL,WIFI_SECOND_CHAN_NONE)!=ESP_OK || esp_now_init()!=ESP_OK) {
     Serial.println("ESP-NOW init failed"); return;
@@ -41,14 +219,94 @@ void setup() {
   peer.channel=DRAGON_RADIO_CHANNEL; peer.ifidx=WIFI_IF_STA; peer.encrypt=false;
   if (esp_now_add_peer(&peer)!=ESP_OK) { Serial.println("ESP-NOW peer failed"); return; }
   bootId=esp_random(); ready=true;
+#if RADIO_DEV_INSECURE
+  static DevSphere sphere(devAdapter,DRAGON_BALL_ID,bootId); devSphere=&sphere;
+  if(!radioTx.init() || esp_now_register_send_cb(txDone)!=ESP_OK) { ready=false; return; }
+  devQueue=xQueueCreate(8,sizeof(DevPacket));
+  if (!devQueue || esp_now_register_recv_cb(devReceive)!=ESP_OK) { Serial.println("DEV RX init failed"); ready=false; return; }
+  Serial.println("[DEV INSECURE] unencrypted, unauthenticated; actuators disabled");
+#else
+  if (!radioTx.init(false) || esp_now_register_send_cb(txDone)!=ESP_OK) { ready=false; return; }
+  if (esp_now_register_recv_cb(secureReceive)==ESP_OK) {
+    const bool secureReady = secure.begin(false,nullptr,DRAGON_BALL_ID);
+#if SPHERE_MOTOR_USB_TEST
+    if (motorLow && secureReady && motor.begin() &&
+        motor.request(millis(), kMotorStartupPulseMs) == MotorTestResult::Started) {
+      secure.setMotorHandler(requestRemoteMotor);
+      Serial.println("MOTOR_TEST READY (USB), startup pulse 60 ms");
+    }
+#else
+    (void)secureReady;
+#endif
+#if defined(ARDUINO_XIAO_ESP32C6)
+    if (secureReady) {
+      beginRgb();
+      secure.setRgbHandler(handleRgb);
+#if SPHERE_OTA && !SPHERE_OTA_NVS_TRACE
+      otaHealthy=rgbReady && maintenance.begin(secure);
+      if (otaHealthy) sphereNvsUnlock();
+#endif
+    }
+#endif
+  }
+#endif
   Serial.printf("Dragon beacon ID=%d channel=%d (broadcast, not authenticated)\n",DRAGON_BALL_ID,DRAGON_RADIO_CHANNEL);
 }
 void loop() {
+#if SPHERE_OTA && !RADIO_DEV_INSECURE
+  static uint32_t nvsReportAt=0;
+  if (millis()-nvsReportAt>=5000) {
+    nvsReportAt=millis();
+    sphereNvsPrint(Serial);
+  }
+#endif
+#if SPHERE_MOTOR_USB_TEST
+  if (!ready) motor.disable();
+  motor.tick(millis());
+#endif
   if (!ready) { delay(100); return; }
-  if ((uint32_t)(millis()-last)>=1000) {
-    last=millis(); BeaconFrame frame={DRAGON_BALL_ID,false,bootId,sequence++,0};
+#if SPHERE_MOTOR_USB_TEST && !SPHERE_OTA
+  pollMotorConsole();
+#endif
+  #if RADIO_DEV_INSECURE
+  static bool lastOnline=false;
+  devSphere->tick(millis());
+  DevPacket packet; unsigned budget=8;
+  while (budget-- && xQueueReceive(devQueue,&packet,0)==pdTRUE) { RadioFrame f{};if(radioDecode(packet.bytes,sizeof(packet.bytes),f)) Serial.printf("[DEV INSECURE] RX type=%s id=%u seq=%lu RSSI=%d channel=%d\n",devMessageName(f.type),f.id,(unsigned long)f.sequence,packet.rssi,DRAGON_RADIO_CHANNEL);devSphere->receive(packet.mac,packet.bytes,sizeof(packet.bytes),millis()); }
+  if (devSphere->online()!=lastOnline) {lastOnline=devSphere->online(); Serial.printf("[DEV INSECURE] %s channel=%d\n",lastOnline?"LINK_RECOVERED":"LINK_LOST",DRAGON_RADIO_CHANNEL);}
+#else
+  const uint32_t now = millis();
+#if SPHERE_OTA
+  if (maintenance.tick(now,[] {
+    motor.quiet(millis());
+    rgb.manual(false,0,rgb.brightness(),millis());
+    renderRgb({});
+    return rgbRendered==0 && rmtTransmitCompleted(sphereRgb::kChain.dataPin);
+  })) return;
+  pollMotorConsole();
+#endif
+  secure.tick(now);
+#if defined(ARDUINO_XIAO_ESP32C6)
+  if (rgbReady && (rgbStarted || now-rgbInitAt>=70)) {
+    if (!rgbStarted) {
+      rgb.begin(now,SPHERE_RGB_STARTUP_WHITE);
+      rgbStarted=true;
+    }
+    if (secure.linkStatus(now)==SecureLinkStatus::Paired) rgb.paired(now);
+    renderRgb(rgb.update(now));
+  }
+  if (userLed.update(secure.linkStatus(now), now))
+    gpio_set_level(kUserLedPin, userLed.lit() ? LOW : HIGH);
+#endif
+  static uint32_t lastStatus=0;
+  if (uint32_t(millis()-lastStatus)>=5000) { lastStatus=millis(); secure.print(Serial,lastStatus); }
+#endif
+  radioTx.tick();
+  if (int32_t(millis()-nextBeacon)>=0) {
+    nextBeacon=millis()+470+(esp_random()%61); // ~500 ms, +/-30 ms jitter
+    BeaconFrame frame={DRAGON_BALL_ID,false,bootId,sequence++,0};
     uint8_t bytes[BEACON_FRAME_SIZE]; beaconEncode(frame,bytes);
-    esp_err_t result=esp_now_send(broadcastMac,bytes,sizeof(bytes));
+    esp_err_t result=radioTx.enqueue(broadcastMac,bytes)?ESP_OK:ESP_ERR_NO_MEM;
     if (result!=ESP_OK) Serial.printf("send error: %d\n",(int)result);
   }
   delay(10);

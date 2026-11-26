@@ -9,6 +9,7 @@
 #include "display_module.h"
 #include "sensors_module.h"
 #include "gps_module.h"
+#include <Preferences.h>
 #include "app_manager.h"
 #include "standby_button.h"
 #include "app_radar.h"
@@ -18,6 +19,7 @@
 #include "beacon_service.h"
 #include "sd_service.h"
 #include "ota_service.h"
+#include <nvs_flash.h>
 #include "audio_service.h"
 #include "audio_codec_probe.h"
 #include "audiobookshelf_client.h"
@@ -654,6 +656,8 @@ void buildRadarSnapshot(RadarSystemSnapshot &snap) {
   snap.gps_status = (uint8_t)g.status;
   snap.gps_i2c_online = g.i2c_reachable;
   snap.gps_fix_valid = g.fix_valid;
+  snap.gps_uart_active = g.uart_fallback_active;
+  snap.gps_ever_had_fix = g.ever_had_valid_fix;
   snap.gps_fix_quality = g.fix_quality;
   snap.gps_sats_in_use = g.satellites_in_use;
   snap.gps_sats_in_view = g.satellites_in_view;
@@ -850,6 +854,7 @@ void handleSerialCommand(String cmd) {
 void setup() {
   // 1. CRITICAL HARDWARE SAFETY: Force GPIO16 (Motor) LOW as very first instruction
   motorSafePreInit();
+  otaServiceBeginBoot();
 
   // 2. Disable Wi-Fi and Bluetooth for clean power/EMI baseline
   WiFi.mode(WIFI_OFF);
@@ -876,6 +881,7 @@ void setup() {
   //    gpsInit() is called right after TEST 1 so TEST 1's EXIO7 reset test doesn't interrupt an active GPS session
   peripheralsInit();
   settingsInit();
+  appRadarLocationsInit();
   audiobookshelfInit();
   wifiServiceSetServerOriginHandler(audiobookshelfSetOrigin);
   displayInit(true);
@@ -892,30 +898,138 @@ void setup() {
   printHelp();
 }
 
+namespace {
+DebugSphereRgb rgbPage;
+DebugSphereOta otaPage;
+const char *rgbKey(uint8_t id,char (&key)[3]) {
+  key[0]='b'; key[1]=char('0'+id); key[2]=0;
+  return key;
+}
+void loadRgbBrightness() {
+  Preferences store;
+  char key[3];
+  rgbPage.brightness=50;
+  if (store.begin("radar_rgb",true)) {
+    const uint8_t value=store.getUChar(rgbKey(rgbPage.id,key),50);
+    if (value<=100) rgbPage.brightness=value;
+  }
+}
+}
+
+const DebugSphereRgb &debugSphereRgb() {
+  static const bool loaded=(loadRgbBrightness(),true);
+  (void)loaded;
+  return rgbPage;
+}
+
+bool debugSphereRgbTap(const GestureEvent &event) {
+  if (event.type!=Gesture::Tap || event.x<82 || event.x>=384) return false;
+  if (event.y>=148 && event.y<193) {
+    rgbPage.id=1+(rgbPage.id-1+(event.x<233?6:1))%7;
+    loadRgbBrightness();
+    rgbPage.unavailable=false;
+  } else if (event.y>=195 && event.y<240) {
+    rgbPage.brightness=uint8_t(((event.x-82)*100+150)/301);
+  } else if (event.y>=242 && event.y<287) {
+    rgbPage.color=(rgbPage.color+(event.x<233?6:1))%7;
+  } else if (event.y>=295 && event.y<345) {
+    if (beaconServiceRgbStatus(rgbPage.id)==SecureMotorStatus::Pending) return true;
+    rgbPage.unavailable=!beaconServiceRequestRgb(rgbPage.id,rgbCommand(
+        event.x<233 ? RgbAction::On : RgbAction::Off,rgbPage.brightness,rgbPage.color));
+    if (!rgbPage.unavailable) {
+      Preferences store;
+      char key[3];
+      if (store.begin("radar_rgb") && store.getUChar(rgbKey(rgbPage.id,key),50)!=rgbPage.brightness)
+        store.putUChar(key,rgbPage.brightness);
+    }
+  } else return false;
+  return true;
+}
+
+const DebugSphereOta &debugSphereOta() { return otaPage; }
+
+bool debugSphereOtaTap(const GestureEvent &event) {
+  if (event.type!=Gesture::Tap || event.x<82 || event.x>=384) return false;
+  auto &s=otaPage.state;
+  if (event.y>=121 && event.y<156 && !otaServiceActive()) {
+    otaPage.radar=event.x<233;
+    otaPage.radarConfirm=false;
+    if (s==SphereOtaUi::Confirm) s=SphereOtaUi::Idle;
+    return true;
+  }
+  if (otaPage.radar) {
+    if (event.y<348 || event.y>=392) return false;
+    if (otaServiceActive()) otaServiceStop();
+    else if (!otaPage.radarConfirm) otaPage.radarConfirm=true;
+    else {
+      otaPage.radarConfirm=false;
+      if (event.x<233) otaServiceStart();
+    }
+    return true;
+  }
+  if (s==SphereOtaUi::Arming || s==SphereOtaUi::Starting || s==SphereOtaUi::Query) return true;
+  if (event.y>=158 && event.y<190) {
+    otaPage.id=1+(otaPage.id-1+(event.x<233?6:1))%7;
+    s=SphereOtaUi::Idle;
+  } else if (event.y>=240 && event.y<285) {
+    if (s==SphereOtaUi::Confirm) {
+      if (event.x>=233) { s=SphereOtaUi::Idle; return true; }
+      s=beaconServiceRequestRgb(otaPage.id,sphereOtaCommand(RgbAction::OtaArm))
+        ? SphereOtaUi::Arming : SphereOtaUi::Refused;
+    } else s=SphereOtaUi::Confirm;
+  } else if (event.y>=290 && event.y<330) {
+    s=beaconServiceRequestRgb(otaPage.id,sphereOtaCommand(RgbAction::OtaInfo))
+      ? SphereOtaUi::Query : SphereOtaUi::Refused;
+  } else return false;
+  return true;
+}
+
+void debugSphereOtaUpdate() {
+  auto &s=otaPage.state;
+  if (s!=SphereOtaUi::Arming && s!=SphereOtaUi::Starting && s!=SphereOtaUi::Query) return;
+  const auto status=beaconServiceRgbStatus(otaPage.id);
+  if (status==SecureMotorStatus::Pending) return;
+  if (status!=SecureMotorStatus::Accepted) {
+    s=status==SecureMotorStatus::Unconfirmed ? SphereOtaUi::Unknown : SphereOtaUi::Refused;
+    return;
+  }
+  if (s==SphereOtaUi::Arming)
+    s=beaconServiceRequestRgb(otaPage.id,sphereOtaCommand(RgbAction::OtaStart))
+      ? SphereOtaUi::Starting : SphereOtaUi::Refused;
+  else s=s==SphereOtaUi::Starting ? SphereOtaUi::Ack : SphereOtaUi::Idle;
+}
+
 void loop() {
   // 1. Non-blocking periodic updates of all modules
   peripheralsUpdate();
   settingsUpdate();
-  wifiServiceUpdate();
+  otaServiceUpdate();
+  if (!otaServiceActive()) wifiServiceUpdate();
   audiobookshelfUpdate();
   beaconServiceUpdate();
+  if (otaServiceBootPending())
+    otaServiceFinishBoot(nvs_flash_init() == ESP_OK && displayIsInitialized() &&
+                         displayIsTouchOnline() && beaconServiceReady());
   const ButtonStatus &powerButton = buttonGetStatus();
   if (g_standby) {
     const bool shortPress = buttonConsumeShortPress();
     const bool longPress = buttonConsumeLongPress();
     if (!g_standbyButton.shouldWake(powerButton.pressed,shortPress || longPress)) { delay(10); return; }
     g_standby = false;
+    beaconServiceSetProximitySuspended(false);
+    g_gestures = GestureManager();
     g_apps = AppManager();
     displaySetBrightness(settingsGet().brightness);
   } else if (g_standbyButton.shouldEnter(powerButton.pressed,powerButton.current_hold_ms,otaServiceActive())) {
     motorStop(); displaySetBrightness(0);
     g_standbyButton.entered(true); g_standby = true;
+    beaconServiceSetProximitySuspended(true);
     return;
   }
   sensorsUpdate();
   gpsUpdate();
 
-  if (otaServiceUpdating()) motorStop();
+  if (otaServiceActive()) motorStop();
   static uint32_t mag_stream_last = 0;
   if (g_mag_stream && millis() - mag_stream_last >= 500) {
     mag_stream_last = millis();
@@ -929,7 +1043,30 @@ void loop() {
   bool tap = false;
   g_touch_pressed = displayPollTouch(g_touch_x, g_touch_y, tap);
   GestureEvent gesture = g_gestures.update(g_touch_pressed, g_touch_x, g_touch_y, millis());
-  if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap && settingsGet().demo) appRadarApproach();
+  if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar && gesture.type == Gesture::Tap) {
+    const auto mode=settingsGet().radar_mode;
+    const bool open=mode==RadarMode::Open;
+    const int16_t gameX=open ? RADAR_OPEN_GAME_X : RADAR_GAME_X;
+    const int16_t gameWidth=open ? RADAR_OPEN_ACTION_WIDTH : RADAR_GAME_WIDTH;
+    if (mode==RadarMode::Demo) appRadarApproach();
+    else if (open && gesture.x >= RADAR_GPS_X && gesture.x < RADAR_GPS_X + RADAR_OPEN_ACTION_WIDTH &&
+             gesture.y >= RADAR_GAME_Y && gesture.y < RADAR_GAME_Y + RADAR_GAME_HEIGHT) {
+      appRadarSaveSpherePosition();
+    }
+    else if (gesture.y >= RADAR_SPHERE_Y && gesture.y < RADAR_SPHERE_Y + RADAR_SPHERE_HEIGHT &&
+             gesture.x >= RADAR_SPHERE_X && gesture.x < RADAR_SPHERE_X + SphereSearch::count*RADAR_SPHERE_PITCH) {
+      const int16_t offset=gesture.x-RADAR_SPHERE_X;
+      if (offset%RADAR_SPHERE_PITCH<RADAR_SPHERE_WIDTH)
+        beaconServiceSelectSphere(1+offset/RADAR_SPHERE_PITCH);
+    } else if (gesture.x >= gameX && gesture.x < gameX + gameWidth &&
+               gesture.y >= RADAR_GAME_Y && gesture.y < RADAR_GAME_Y + RADAR_GAME_HEIGHT &&
+               beaconServiceSphereGame().foundCount) {
+      beaconServiceNewGame();
+    } else if (gesture.x >= RADAR_FOUND_X && gesture.x < RADAR_FOUND_X + RADAR_FOUND_WIDTH &&
+               gesture.y >= RADAR_FOUND_Y && gesture.y < RADAR_FOUND_Y + RADAR_FOUND_HEIGHT) {
+      if (beaconServiceConfirmSphereFound() == SearchEvent::SphereFound) beaconServiceSphereFoundFeedback();
+    }
+  }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Audiobookshelf && gesture.type == Gesture::Tap) {
     if (gesture.y >= 245 && gesture.y < 315) { if (gesture.x < 233) { if (audiobookshelfIsAuthenticated()) audiobookshelfLoadCatalog(); else audiobookshelfCheckServer(); } else audioServiceTestTone(); }
     else if (gesture.y >= 150 && gesture.y < 240 && audiobookshelfIsAuthenticated()) audiobookshelfSelectNext();
@@ -940,18 +1077,34 @@ void loop() {
     }
   }
   if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings && gesture.type == Gesture::Tap) appSettingsTap(gesture.x, gesture.y);
-  if (!g_apps.launcherOpen() && g_apps.active() == AppId::Debug && gesture.type == Gesture::Hold) motorTriggerShortPulse();
-  g_apps.gesture(gesture);
-  if (buttonConsumeShortPress()) { if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar) appRadarZoom(); else if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings) appSettingsNext(); else g_apps.shortPress(); }
-  if (buttonConsumeLongPress()) g_apps.longPress();
+  const bool sphereMotorPage = !g_debugLegacy && !g_apps.launcherOpen() &&
+                               g_apps.active() == AppId::Debug && g_apps.debugPage() == DEBUG_SPHERE_MOTOR_PAGE;
+  const bool sphereRgbPage = !g_debugLegacy && !g_apps.launcherOpen() &&
+                             g_apps.active()==AppId::Debug && g_apps.debugPage()==DEBUG_SPHERE_RGB_PAGE;
+  const bool sphereOtaPage=!g_debugLegacy && !g_apps.launcherOpen() &&
+      g_apps.active()==AppId::Debug && g_apps.debugPage()==DEBUG_SPHERE_OTA_PAGE;
+  debugSphereOtaUpdate();
+  if (otaServiceActive()) {
+    if (sphereOtaPage) debugSphereOtaTap(gesture);
+  } else if ((sphereOtaPage && debugSphereOtaTap(gesture)) ||
+      (sphereRgbPage && debugSphereRgbTap(gesture))) {}
+  else if (sphereMotorPage && debugSphereMotorTap(gesture)) beaconServiceRequestSphereMotor();
+  else {
+    if (!sphereMotorPage && !sphereRgbPage && !sphereOtaPage && !g_apps.launcherOpen() && g_apps.active() == AppId::Debug &&
+        gesture.type == Gesture::Hold) motorTriggerShortPulse();
+    g_apps.gesture(gesture);
+  }
+  if (buttonConsumeShortPress() && !otaServiceActive()) { if (!g_apps.launcherOpen() && g_apps.active() == AppId::Radar) appRadarZoom(); else if (!g_apps.launcherOpen() && g_apps.active() == AppId::Settings) appSettingsNext(); else g_apps.shortPress(); }
+  if (buttonConsumeLongPress() && !otaServiceActive()) g_apps.longPress();
   if (appSettingsConsumeStandby() && !otaServiceActive()) {
     motorStop();
     displaySetBrightness(0);
     g_standbyButton.entered(buttonGetStatus().pressed);
     g_standby = true;
+    beaconServiceSetProximitySuspended(true);
     return;
   }
-  if (appSettingsConsumeRestart() && !otaServiceUpdating()) ESP.restart();
+  if (appSettingsConsumeRestart() && !otaServiceActive()) ESP.restart();
 
   // Refresh TCA9554 register snapshot every 500 ms
   static uint32_t last_tca_ms = 0;
@@ -970,7 +1123,7 @@ void loop() {
     else if (g_apps.active() == AppId::Radar) {
       RadarView view = appRadarUpdate(snap);
       static uint32_t lastBeepCycle = 0;
-      if (!otaServiceUpdating()) {
+      if (!otaServiceActive()) {
         appRadarHaptic(view, millis());
         const uint32_t beepCycle = millis() / RADAR_SCAN_PERIOD_MS;
         if (view.count && settingsGet().sound && settingsGet().volume && beepCycle != lastBeepCycle) {

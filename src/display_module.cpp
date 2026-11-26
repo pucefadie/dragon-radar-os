@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ota_service.h"
 #include <WiFi.h>
 #include "display_module.h"
@@ -19,6 +20,43 @@
 #include <string.h>
 
 namespace {
+
+const char *secureLinkLabel(SecureLinkStatus status) {
+  switch (status) {
+    case SecureLinkStatus::Paired: return "SFERA AUTENTICATA";
+    case SecureLinkStatus::Lost: return "SFERA LINK PERSO";
+    case SecureLinkStatus::AwaitingHandshake: return "SFERA ATTESA HANDSHAKE";
+    case SecureLinkStatus::ChannelMismatch: return "CANALE RF NON ALLINEATO";
+    case SecureLinkStatus::Unavailable: return "RADIO SICURA NON ATTIVA";
+  }
+  return "";
+}
+
+const char *signalQualityLabel(SignalQuality quality) {
+  switch (quality) {
+    case SignalQuality::Weak: return "DEBOLE";
+    case SignalQuality::Fair: return "MEDIO";
+    case SignalQuality::Strong: return "FORTE";
+    case SignalQuality::Unavailable: return "--";
+  }
+  return "--";
+}
+
+const char *proximityLabel(const ProximitySnapshot &signal, SecureLinkStatus link) {
+  if (signal.state == ProximityState::Found) return "SFERA TROVATA";
+  if (link != SecureLinkStatus::Paired) return "SFERA NON COLLEGATA";
+  switch (signal.state) {
+    case ProximityState::Searching: return "ATTESA MISURA RSSI";
+    case ProximityState::Lost: return "MISURA RSSI SCADUTA";
+    case ProximityState::Weak: return "SEGNALE DEBOLE";
+    case ProximityState::Approaching: return "IN AVVICINAMENTO";
+    case ProximityState::MovingAway: return "IN ALLONTANAMENTO";
+    case ProximityState::Near: return "VICINANZA ELEVATA";
+    case ProximityState::Stable: return "SEGNALE STABILE";
+    case ProximityState::Found: return "SFERA TROVATA";
+  }
+  return "";
+}
 
 constexpr int16_t kCenterX = HW_LCD_WIDTH / 2;  // 233
 constexpr int16_t kCenterY = HW_LCD_HEIGHT / 2; // 233
@@ -1457,24 +1495,109 @@ void displayRenderRadarApp(const RadarView &v) {
                   233+(int16_t)(dx*187)+ox,233+(int16_t)(dy*187)+oy,trailColors[i]);
     }
   }
-  d->fillTriangle(233+rx(0,-22),233+ry(0,-22),233+rx(-15,13),233+ry(-15,13),233+rx(15,13),233+ry(15,13),RADAR_COLOR_RED);
-  if ((millis() / 450) % 2 == 0) for (unsigned i=0; i<v.count; ++i) {
-    int x=233+rx(v.balls[i].x,v.balls[i].y), y=233+ry(v.balls[i].x,v.balls[i].y);
-    if (v.balls[i].offscreen) d->drawCircle(x,y,5,RADAR_COLOR_YELLOW);
-    else { d->fillCircle(x,y,7,RADAR_COLOR_YELLOW); d->drawCircle(x,y,10,RADAR_COLOR_AMBER); }
+  if (v.open) d->fillTriangle(233,211,218,246,248,246,RADAR_COLOR_RED);
+  else d->fillTriangle(233+rx(0,-22),233+ry(0,-22),233+rx(-15,13),233+ry(-15,13),233+rx(15,13),233+ry(15,13),RADAR_COLOR_RED);
+  const auto game=beaconServiceSphereGame();
+  if (v.open || (millis() / 450) % 2 == 0) for (unsigned i=0; i<v.count; ++i) {
+    const auto &ball=v.balls[i];
+    const int x=233+(v.open ? ball.x : rx(ball.x,ball.y)), y=233+(v.open ? ball.y : ry(ball.x,ball.y));
+    const uint16_t color=v.open && ball.id!=game.selected ? RADAR_COLOR_WHITE : RADAR_COLOR_YELLOW;
+    if (ball.offscreen) d->drawCircle(x,y,5,color);
+    else { d->fillCircle(x,y,7,color); d->drawCircle(x,y,10,RADAR_COLOR_AMBER); }
+    if (v.open) {
+      d->setTextSize(1);
+      d->setTextColor(color);
+      d->setCursor(x+9,y-5);
+      d->print(unsigned(ball.id));
+    }
   }
   char text[48];
-  snprintf(text,sizeof(text),"%s  %um",v.demo ? "DEMO" : "REALE", v.range_m);
+  if (v.demo) snprintf(text,sizeof(text),"DEMO  %um",v.range_m);
+  if (!v.demo) {
+    if (game.selected) snprintf(text,sizeof(text),"SFERA %u  TROVATE %u/7",unsigned(game.selected),unsigned(game.foundCount));
+    else snprintf(text,sizeof(text),"TROVATE %u/7",unsigned(game.foundCount));
+  }
   drawCenteredText(d, 62, text, RADAR_COLOR_BG, 2);
-  snprintf(text,sizeof(text),"%s %03.0f %s",v.heading_up?"HEAD":"NORD",v.heading,v.compass_calibrated?"CAL":"RAW");
+  if (v.open) {
+    if (v.heading_up) snprintf(text,sizeof(text),"APERTO  %03.0f  ZOOM %um",v.heading,v.range_m);
+    else snprintf(text,sizeof(text),"APERTO  NORD FISSO  ZOOM %um",v.range_m);
+  } else {
+    snprintf(text,sizeof(text),"%s %03.0f %s",v.heading_up?"HEAD":"NORD",v.heading,v.compass_calibrated?"CAL":"RAW");
+  }
   drawCenteredText(d, 88, text, RADAR_COLOR_BG, 1);
   if (!v.compass_online) drawCenteredText(d, 108, "BUSSOLA OFFLINE", RADAR_COLOR_RED, 1);
   else if (v.heading_held) drawCenteredText(d, 108, "BUSSOLA PAUSA MOTORE", RADAR_COLOR_YELLOW, 1);
-  if (v.demo) { snprintf(text,sizeof(text),"SIMULATO: %.0f m",v.nearest_m); drawCenteredText(d, 373,text,RADAR_COLOR_BG,1); }
-  else {
-    snprintf(text,sizeof(text),"RF CH%u %u/7 NON LOCALIZZ",beaconServiceChannel(),beaconServiceFreshCount());
-    drawCenteredText(d, 353, text, RADAR_COLOR_YELLOW, 1);
-    drawCenteredText(d, 373, v.gps_valid ? "NESSUN TARGET REALE" : "GPS NO FIX / NO TARGET", RADAR_COLOR_YELLOW,1);
+  const auto link = beaconServiceSecureLinkStatus();
+  if (v.demo) {
+    drawCenteredText(d, 333, secureLinkLabel(link),
+                     link == SecureLinkStatus::Paired ? RADAR_COLOR_BG : RADAR_COLOR_YELLOW, 2);
+    snprintf(text,sizeof(text),"SIMULATO: %.0f m",v.nearest_m);
+    drawCenteredText(d, 373,text,RADAR_COLOR_BG,1);
+  } else {
+    const auto &signal = v.proximity;
+    const bool found = signal.state == ProximityState::Found;
+    const bool available = !found && link == SecureLinkStatus::Paired && signal.fresh;
+    for (uint8_t id=1; id<=SphereSearch::count; ++id) {
+      const uint8_t bit=1u<<(id-1);
+      const bool associated=game.associated & bit;
+      const bool completed=game.found & bit;
+      const int x=RADAR_SPHERE_X+(id-1)*RADAR_SPHERE_PITCH;
+      const uint16_t color=completed ? RADAR_COLOR_GRID_BRIGHT : associated ? RADAR_COLOR_WHITE : RADAR_COLOR_GRAY;
+      d->fillRoundRect(x,RADAR_SPHERE_Y,RADAR_SPHERE_WIDTH,RADAR_SPHERE_HEIGHT,5,RADAR_COLOR_BG);
+      d->drawRoundRect(x,RADAR_SPHERE_Y,RADAR_SPHERE_WIDTH,RADAR_SPHERE_HEIGHT,5,
+                       game.selected==id ? RADAR_COLOR_YELLOW : color);
+      d->setTextSize(2);
+      d->setTextColor(color);
+      d->setCursor(x+14,RADAR_SPHERE_Y+6);
+      d->print(unsigned(id));
+    }
+    constexpr int ringCount = 3;
+    constexpr int stepsPerRing = kProximityMaxLevel / ringCount;
+    const int level = available ? signal.level : 0;
+    for (int i = 0; i < ringCount; ++i) {
+      const int radius = 34 + 20*i;
+      d->drawCircle(233,233,radius+2*stepsPerRing,RADAR_COLOR_GRID_DARK);
+      const int steps = std::min(stepsPerRing,std::max(0,level-i*stepsPerRing));
+      for (int j = 0; j < 2*steps; ++j)
+        d->drawCircle(233,233,radius+j,RADAR_COLOR_YELLOW);
+    }
+    if (v.open) {
+      const char *gpsText=nullptr;
+      if (v.gps_save==GpsSaveStatus::Saved) gpsText="POSIZIONE SALVATA";
+      else if (v.gps_save==GpsSaveStatus::Failed) gpsText="SALVATAGGIO GPS FALLITO";
+      else if (!v.gps_valid) gpsText="GPS SENZA FIX  |  RSSI";
+      else if (!v.selected_position) gpsText="POSIZIONE GPS ASSENTE  |  RSSI";
+      else if (v.gps_distance_m>=1.0)
+        snprintf(text,sizeof(text),"GPS %.0f m  %03u gradi",v.gps_distance_m,
+                 unsigned(lround(v.gps_bearing_deg))%360);
+      else if (v.gps_distance_m>=0.0) gpsText="GPS MENO DI 1 m";
+      else gpsText="POSIZIONE GPS SALVATA";
+      drawCenteredText(d,278,gpsText?gpsText:text,RADAR_COLOR_WHITE,1);
+    }
+    const char *proximityText=game.foundCount==SphereSearch::count ? "TUTTE LE SFERE TROVATE" :
+                              game.selected ? proximityLabel(signal,link) : "NESSUNA SFERA ASSOCIATA";
+    drawCenteredText(d, 308, proximityText, RADAR_COLOR_YELLOW, 2);
+    drawCenteredText(d, 337,secureLinkLabel(link),RADAR_COLOR_BG,1);
+    if (available) {
+      d->fillRoundRect(RADAR_FOUND_X,RADAR_FOUND_Y,RADAR_FOUND_WIDTH,RADAR_FOUND_HEIGHT,8,RADAR_COLOR_BG);
+      drawCenteredText(d, 367,"CONFERMA RITROVAMENTO",RADAR_COLOR_WHITE,2);
+    }
+    if (v.open) {
+      d->fillRoundRect(RADAR_GPS_X,RADAR_GAME_Y,RADAR_OPEN_ACTION_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
+      d->setTextSize(1);
+      d->setTextColor(v.gps_can_save ? RADAR_COLOR_WHITE : RADAR_COLOR_GRAY);
+      d->setCursor(RADAR_GPS_X+35,405);
+      d->print("SALVA GPS");
+      if (game.foundCount) {
+        d->fillRoundRect(RADAR_OPEN_GAME_X,RADAR_GAME_Y,RADAR_OPEN_ACTION_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
+        d->setTextColor(RADAR_COLOR_WHITE);
+        d->setCursor(RADAR_OPEN_GAME_X+23,405);
+        d->print("NUOVA PARTITA");
+      }
+    } else if (game.foundCount) {
+      d->fillRoundRect(RADAR_GAME_X,RADAR_GAME_Y,RADAR_GAME_WIDTH,RADAR_GAME_HEIGHT,6,RADAR_COLOR_BG);
+      drawCenteredText(d, 404,"NUOVA PARTITA",RADAR_COLOR_WHITE,2);
+    }
   }
   d->fillRoundRect(207, 432, 52, 5, 2, RADAR_COLOR_GRID_BRIGHT); flushDisplay();
 }
@@ -1495,7 +1618,13 @@ void displayRenderSettings(uint8_t selection, const RadarSystemSnapshot &snap) {
     case 0: title="LUMINOSITA"; snprintf(value,sizeof(value),"%u / 255",s.brightness); break;
     case 1: title="VOLUME"; snprintf(value,sizeof(value),"%u %%",s.volume); break;
     case 2: title="VIBRAZIONE"; snprintf(value,sizeof(value),"%s",s.vibration?"ON":"OFF"); break;
-    case 3: title="RADAR"; snprintf(value,sizeof(value),"%s",s.demo?"DEMO":"REALE"); break;
+    case 3:
+      title="RADAR";
+      snprintf(value,sizeof(value),"%s",s.radar_mode==RadarMode::Demo ? "DEMO" :
+               s.radar_mode==RadarMode::Closed ? "REALE CHIUSO" : "REALE APERTO");
+      if (s.radar_mode==RadarMode::Open) snprintf(detail1,sizeof(detail1),"GPS + ESP-NOW");
+      else if (s.radar_mode==RadarMode::Closed) snprintf(detail1,sizeof(detail1),"ESP-NOW / RSSI");
+      break;
     case 4: title="ORIENTAMENTO"; snprintf(value,sizeof(value),"%s",s.heading_up?"BUSSOLA":"NORD FISSO"); break;
     case 5: title="CALIBRAZIONE"; snprintf(value,sizeof(value),"%s",magCalIsInProgress()?"STOP / SALVA":"AVVIA"); break;
     case 6:
@@ -1515,10 +1644,7 @@ void displayRenderSettings(uint8_t selection, const RadarSystemSnapshot &snap) {
     case 9:
       title="AGGIORNA OTA";
       snprintf(value,sizeof(value),"%s",otaServiceStatus());
-      if (otaServiceActive() && !otaServiceUpdating()) {
-        snprintf(detail1,sizeof(detail1),"KEY: %s",otaServicePassword());
-        snprintf(detail2,sizeof(detail2),"IP: %s",WiFi.localIP().toString().c_str());
-      } else if (!otaServiceActive()) snprintf(detail1,sizeof(detail1),"SERVE WI-FI");
+      snprintf(detail1,sizeof(detail1),"DEBUG > AGGIORNAMENTI OTA");
       break;
     case 12: title="POWER OFF"; snprintf(value,sizeof(value),"STANDBY"); snprintf(detail1,sizeof(detail1),"%s",otaServiceActive()?"OTA ATTIVO":"TASTO: ACCENDI"); break;
     case 13: title="RIAVVIO"; snprintf(value,sizeof(value),"%s",appSettingsRestartConfirm()?"CONFERMA?":"RIAVVIA"); break;
@@ -1548,26 +1674,168 @@ void displayRenderDebugLarge(const RadarSystemSnapshot &snap, uint8_t page) {
   Arduino_GFX *d=getDrawTarget(); d->fillScreen(RADAR_COLOR_BG); d->drawCircle(233,233,222,RADAR_COLOR_GRID_MID);
   char heading[32]; snprintf(heading,sizeof(heading),"DEBUG %u/%u",(unsigned)(page%DEBUG_PAGE_COUNT)+1,(unsigned)DEBUG_PAGE_COUNT);
   drawCenteredText(d,65,heading,RADAR_COLOR_GRID_BRIGHT,2);
-  const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="";
+  const char *title=""; char a[48]="",b[48]="",c[48]="",e[48]="",detail[48]="";
+  if (page==DEBUG_SPHERE_OTA_PAGE) {
+    const auto &ota=debugSphereOta();
+    const auto version=beaconServiceSphereVersion(ota.id);
+    drawCenteredText(d,90,"AGGIORNAMENTI OTA",RADAR_COLOR_GRID_BRIGHT,2);
+    d->fillRoundRect(82,121,302,35,8,RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,130,ota.radar ? "[RADAR]      SFERA" : "RADAR      [SFERA]",RADAR_COLOR_WHITE,2);
+    if (ota.radar) {
+      const auto state=otaServiceState();
+      snprintf(a,sizeof(a),"DragonRadar  v%lu",(unsigned long)otaServiceVersion());
+      drawCenteredText(d,173,a,RADAR_COLOR_WHITE,2);
+      drawCenteredText(d,203,otaServiceStatus(),RADAR_COLOR_GRID_BRIGHT,2);
+      if (state==RadarOtaState::Ready) {
+        snprintf(a,sizeof(a),"WI-FI  %s",otaServicePassword());
+        drawCenteredText(d,229,a,RADAR_COLOR_WHITE,2);
+        drawCenteredText(d,257,"CHIAVE MANIFEST",RADAR_COLOR_WHITE,2);
+        snprintf(a,sizeof(a),"%.16s",otaServiceManifestKey());
+        drawCenteredText(d,280,a,RADAR_COLOR_WHITE,2);
+        if (strlen(otaServiceManifestKey())==32)
+          drawCenteredText(d,301,otaServiceManifestKey()+16,RADAR_COLOR_WHITE,2);
+        drawCenteredText(d,326,"192.168.4.1",RADAR_COLOR_WHITE,2);
+      } else if (state==RadarOtaState::Receiving || state==RadarOtaState::Committing || state==RadarOtaState::Rebooting) {
+        const unsigned percent=otaServiceProgress();
+        snprintf(a,sizeof(a),"%u%%",percent);
+        drawCenteredText(d,240,a,RADAR_COLOR_WHITE,3);
+        d->drawRect(106,280,254,20,RADAR_COLOR_GRID_BRIGHT);
+        d->fillRect(108,282,250*percent/100,16,RADAR_COLOR_GRID_BRIGHT);
+      }
+      if (state!=RadarOtaState::Committing && state!=RadarOtaState::Rebooting) {
+        d->fillRoundRect(82,348,302,44,8,RADAR_COLOR_GRID_DARK);
+        drawCenteredText(d,362,otaServiceActive() ? "ANNULLA OTA" :
+            ota.radarConfirm ? "CONFERMA     ANNULLA" : "ATTIVA OTA",RADAR_COLOR_WHITE,2);
+      }
+      flushDisplay();
+      return;
+    }
+    snprintf(a,sizeof(a),"<       SFERA %u       >",unsigned(ota.id));
+    drawCenteredText(d,166,a,RADAR_COLOR_WHITE,2);
+    snprintf(a,sizeof(a),"SSID DragonBall-%02u",unsigned(ota.id));
+    drawCenteredText(d,191,a,RADAR_COLOR_WHITE,2);
+    drawCenteredText(d,211,secureLinkLabel(beaconServiceLinkForId(ota.id)),RADAR_COLOR_WHITE,2);
+    d->fillRoundRect(82,240,302,45,8,RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,252,ota.state==SphereOtaUi::Confirm ? "CONFERMA      ANNULLA" : "ATTIVA OTA",RADAR_COLOR_WHITE,2);
+    snprintf(a,sizeof(a),version ? "LEGGI VERSIONE  |  %lu" : "LEGGI VERSIONE  |  --",(unsigned long)version);
+    drawCenteredText(d,304,a,RADAR_COLOR_WHITE,2);
+    const char *message="";
+    switch (ota.state) {
+      case SphereOtaUi::Query: case SphereOtaUi::Arming: case SphereOtaUi::Starting:
+        message="IN ATTESA DI CONFERMA"; break;
+      case SphereOtaUi::Ack: message="COMANDO CONFERMATO"; break;
+      case SphereOtaUi::Unknown: message="ESITO NON VERIFICABILE"; break;
+      case SphereOtaUi::Refused: message="COMANDO NON DISPONIBILE"; break;
+      default: break;
+    }
+    drawCenteredText(d,352,message,RADAR_COLOR_WHITE,2);
+    if (ota.state==SphereOtaUi::Ack)
+      drawCenteredText(d,378,"VERIFICA AP SUL PC",RADAR_COLOR_WHITE,2);
+    flushDisplay();
+    return;
+  }
+  if (page==DEBUG_SPHERE_RGB_PAGE) {
+    const auto &rgb=debugSphereRgb();
+    const auto status=beaconServiceRgbStatus(rgb.id);
+    constexpr const char *colors[]={"ROSSO","ARANCIONE","ORO","VERDE","BLU","VIOLA","BIANCO"};
+    drawCenteredText(d,115,"LED SFERA",RADAR_COLOR_GRID_BRIGHT,2);
+    snprintf(a,sizeof(a),"<       SFERA %u       >",unsigned(rgb.id));
+    drawCenteredText(d,160,a,RADAR_COLOR_WHITE,2);
+    snprintf(a,sizeof(a),"LUMINOSITA %u%%",unsigned(rgb.brightness));
+    drawCenteredText(d,202,a,RADAR_COLOR_WHITE,1);
+    d->drawFastHLine(82,225,302,RADAR_COLOR_GRID_MID);
+    d->fillCircle(82+301*rgb.brightness/100,225,5,RADAR_COLOR_YELLOW);
+    snprintf(a,sizeof(a),"<       %s       >",colors[rgb.color]);
+    drawCenteredText(d,256,a,RADAR_COLOR_WHITE,2);
+    d->fillRoundRect(82,295,302,50,8,RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,311,"ACCENDI        SPEGNI",RADAR_COLOR_WHITE,2);
+    const char *result=rgb.unavailable ? "SFERA NON DISPONIBILE" :
+      status==SecureMotorStatus::Pending ? "IN ATTESA" :
+      status==SecureMotorStatus::Accepted ? "COMANDO ACCETTATO" :
+      status==SecureMotorStatus::Unavailable ? "NON DISPONIBILE" :
+      status==SecureMotorStatus::Unconfirmed ? "NESSUNA CONFERMA" : "";
+    drawCenteredText(d,369,result,RADAR_COLOR_WHITE,1);
+    flushDisplay();
+    return;
+  }
+  if (page == DEBUG_SPHERE_MOTOR_PAGE) {
+    const auto link = beaconServiceSecureLinkStatus();
+    const auto status = beaconServiceSphereMotorStatus();
+    const bool enabled = link == SecureLinkStatus::Paired && status != SecureMotorStatus::Pending;
+    const auto game=beaconServiceSphereGame();
+    char title[32];
+    snprintf(title,sizeof(title),"VIBRAZIONE SFERA %u",unsigned(game.selected));
+    drawCenteredText(d,120,game.selected?title:"VIBRAZIONE SFERA",RADAR_COLOR_GRID_BRIGHT,2);
+    drawCenteredText(d,167,secureLinkLabel(link),RADAR_COLOR_WHITE,2);
+    d->fillRoundRect(DEBUG_SPHERE_MOTOR_X,DEBUG_SPHERE_MOTOR_Y,DEBUG_SPHERE_MOTOR_WIDTH,
+                     DEBUG_SPHERE_MOTOR_HEIGHT,8,enabled ? RADAR_COLOR_GRID_MID : RADAR_COLOR_GRID_DARK);
+    drawCenteredText(d,232,"FAI VIBRARE LA SFERA",enabled ? RADAR_COLOR_WHITE : RADAR_COLOR_GRAY,2);
+    const char *result = "";
+    switch (status) {
+      case SecureMotorStatus::Idle: break;
+      case SecureMotorStatus::Pending: result="IN ATTESA DELLA SFERA"; break;
+      case SecureMotorStatus::Accepted: result="COMANDO ACCETTATO"; break;
+      case SecureMotorStatus::CoolingDown: result="ATTENDI PRIMA DI RIPROVARE"; break;
+      case SecureMotorStatus::Unavailable: result="COMANDO NON DISPONIBILE"; break;
+      case SecureMotorStatus::Unconfirmed: result="ESITO NON CONFERMATO"; break;
+    }
+    drawCenteredText(d,287,result,RADAR_COLOR_YELLOW,2);
+    if (status == SecureMotorStatus::Accepted)
+      drawCenteredText(d,315,"VIBRAZIONE DA VERIFICARE",RADAR_COLOR_WHITE,1);
+    drawCenteredText(d,355,"TOCCA QUI: PAGINA",RADAR_COLOR_GRAY,2);
+    d->fillRoundRect(207,432,52,5,2,RADAR_COLOR_GRID_MID);
+    flushDisplay();
+    return;
+  }
   switch(page%DEBUG_PAGE_COUNT) {
     case 0: title="SISTEMA"; snprintf(a,sizeof(a),"BUSSOLA: %s",snap.bmm_online?"OK":"OFF"); snprintf(b,sizeof(b),"IMU: %s",snap.imu_online?"OK":"OFF"); snprintf(c,sizeof(c),"PMIC: %s",snap.pmic_online?"OK":"OFF"); break;
     case 1: title="BUSSOLA"; snprintf(a,sizeof(a),"HEADING %.0f",snap.heading_deg); snprintf(b,sizeof(b),"CAMPO %.1f uT",snap.mag_b_ut); snprintf(c,sizeof(c),"%s %s",snap.mag_calibrated?"CAL":"RAW",(snap.mag_b_ut>=15 && snap.mag_b_ut<=120)?"":"FUORI RANGE"); break;
     case 2: { title="MAG RAW"; const auto &m=sensorsGetStatus().bmm; snprintf(a,sizeof(a),"X %.1f uT",m.raw_x_ut); snprintf(b,sizeof(b),"Y %.1f uT",m.raw_y_ut); snprintf(c,sizeof(c),"Z %.1f uT",m.raw_z_ut); snprintf(e,sizeof(e),"CAMPO %.1f uT",m.raw_b_norm_ut); break; }
     case 3: title="INCLINAZIONE"; snprintf(a,sizeof(a),"ROLL %.1f",snap.roll_deg); snprintf(b,sizeof(b),"PITCH %.1f",snap.pitch_deg); snprintf(c,sizeof(c),"ACC Z %.2f g",snap.acc_z_g); break;
-    case 4: title="GPS"; snprintf(a,sizeof(a),"%s",snap.gps_fix_valid?"FIX VALIDO":"NESSUN FIX"); snprintf(b,sizeof(b),"SAT %u / %u",snap.gps_sats_in_use,snap.gps_sats_in_view); snprintf(c,sizeof(c),"NMEA %lu",(unsigned long)snap.gps_nmea_valid); break;
+    case 4: {
+      title="GPS";
+      const bool usable=radarUsableFix(appRadarFix(snap));
+      const char *source=snap.gps_uart_active ? (snap.gps_i2c_online ? "I2C+UART" : "UART") :
+                          snap.gps_i2c_online ? "I2C" : "--";
+      snprintf(a,sizeof(a),"%s  %s",source,
+               snap.gps_status==RADAR_GPS_VALID_FIX ? "FIX" : resolveGpsStatusShort(snap.gps_status));
+      snprintf(b,sizeof(b),"%s",usable ? "FIX VALIDO" : "FIX NON UTILIZZABILE");
+      if (snap.gps_ever_had_fix) snprintf(c,sizeof(c),"ETA FIX %.1f s",double(snap.gps_fix_age_ms)/1000.0);
+      else snprintf(c,sizeof(c),"ETA FIX --");
+      if (isfinite(snap.gps_hdop) && snap.gps_hdop>0 && snap.gps_hdop<99.9f)
+        snprintf(e,sizeof(e),"QUAL %u  HDOP %.1f",unsigned(snap.gps_fix_quality),double(snap.gps_hdop));
+      else snprintf(e,sizeof(e),"QUAL %u  HDOP --",unsigned(snap.gps_fix_quality));
+      snprintf(detail,sizeof(detail),"SAT %u / %u",unsigned(snap.gps_sats_in_use),unsigned(snap.gps_sats_in_view));
+      break;
+    }
     case 5: title="BATTERIA"; if(snap.battery_present && snap.batt_percent>=0) snprintf(a,sizeof(a),"%d %%",snap.batt_percent); else snprintf(a,sizeof(a),"NON RILEVATA"); snprintf(b,sizeof(b),"%u mV",snap.batt_mv); snprintf(c,sizeof(c),"%s",snap.is_charging?"IN CARICA":"NON IN CARICA"); break;
     case 6: title="RTC"; snprintf(a,sizeof(a),"%s",snap.rtc_online?"ONLINE":"OFFLINE"); snprintf(b,sizeof(b),"%.19s",snap.rtc_datetime); break;
     case 7: title="BUS I2C"; snprintf(a,sizeof(a),"DISPOSITIVI %u",snap.i2c_found_count); snprintf(b,sizeof(b),"ERRORI %lu",(unsigned long)snap.i2c_err_count); snprintf(c,sizeof(c),"BMM 0x%02X",snap.bmm_addr); break;
     case 8: title="TOUCH E TASTO"; snprintf(a,sizeof(a),"TOUCH %s",snap.touch_online?"OK":"OFF"); snprintf(b,sizeof(b),"XY %d %d",snap.touch_x,snap.touch_y); snprintf(c,sizeof(c),"TASTO %s",snap.btn_pressed?"PREMUTO":"RILASCIATO"); break;
     case 9: title="VIBRAZIONE"; snprintf(a,sizeof(a),"MOTORE %s",snap.motor_active?"ON":"OFF"); snprintf(b,sizeof(b),"IMPULSI %lu",(unsigned long)snap.motor_activations); snprintf(c,sizeof(c),"TIENI: TEST"); break;
     case 10: title="MEMORIA"; snprintf(a,sizeof(a),"RAM %lu KB",(unsigned long)(ESP.getFreeHeap()/1024)); snprintf(b,sizeof(b),"PSRAM %lu KB",(unsigned long)(ESP.getFreePsram()/1024)); snprintf(c,sizeof(c),"UPTIME %lu s",(unsigned long)(snap.uptime_ms/1000)); break;
-    case 11: title="WIFI E SFERE"; snprintf(a,sizeof(a),"WIFI %s",wifiServiceStatusText()); snprintf(b,sizeof(b),"RADIO CH %u",beaconServiceChannel()); snprintf(c,sizeof(c),"SFERE RF %u/7",beaconServiceFreshCount()); snprintf(e,sizeof(e),"NON LOCALIZZATE"); break;
+    case 11: {
+      title="WIFI E SFERE";
+      snprintf(a,sizeof(a),"WIFI %s CH %u",wifiServiceStatusText(),beaconServiceChannel());
+      snprintf(b,sizeof(b),"BEACON RF %u/7",beaconServiceFreshCount());
+      snprintf(c,sizeof(c),"%s",secureLinkLabel(beaconServiceSecureLinkStatus()));
+      const auto signal=beaconServiceProximity();
+      if (signal.seen) {
+        snprintf(e,sizeof(e),"RAW %d FILT %.1f dBm",int(signal.raw),double(signal.filtered));
+        if (signal.fresh)
+          snprintf(detail,sizeof(detail),"ETA %.1fs %s %u/%u",double(signal.age_ms)/1000.0,
+                   signalQualityLabel(signal.quality),unsigned(signal.level),unsigned(kProximityMaxLevel));
+        else snprintf(detail,sizeof(detail),"ETA %.1fs SCADUTO",double(signal.age_ms)/1000.0);
+      } else snprintf(e,sizeof(e),"ATTESA RSSI DRA1");
+      break;
+    }
   }
   drawCenteredText(d,120,title,RADAR_COLOR_GRID_BRIGHT,2);
   if(a[0]) drawCenteredText(d,165,a,RADAR_COLOR_WHITE,2);
   if(b[0]) drawCenteredText(d,205,b,RADAR_COLOR_WHITE,2);
   if(c[0]) drawCenteredText(d,245,c,RADAR_COLOR_WHITE,2);
   if(e[0]) drawCenteredText(d,285,e,RADAR_COLOR_YELLOW,2);
+  if(detail[0]) drawCenteredText(d,320,detail,RADAR_COLOR_WHITE,2);
   drawCenteredText(d,355,"TOCCA: PAGINA",RADAR_COLOR_GRAY,2);
   d->fillRoundRect(207,432,52,5,2,RADAR_COLOR_GRID_MID); flushDisplay();
 }

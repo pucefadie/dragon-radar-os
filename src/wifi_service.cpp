@@ -7,6 +7,9 @@
 #include <esp_wifi.h>
 #include <esp_sntp.h>
 #include <atomic>
+#ifndef RADAR_UI_TRIAL
+#define RADAR_UI_TRIAL 0
+#endif
 namespace {
 WebServer server(80);
 DNSServer dns;
@@ -43,6 +46,15 @@ void stopPortal() {
 }
 void wifiServiceInit() {
   if (initialized) return;
+  if (RADAR_UI_TRIAL) {
+    // Arduino selects RAM storage inside low-level init when persistence is
+    // disabled before entering STA mode. Check storage again before use.
+    WiFi.persistent(false);
+    WiFi.setAutoReconnect(false);
+    initialized = WiFi.mode(WIFI_STA) && esp_wifi_set_storage(WIFI_STORAGE_RAM) == ESP_OK;
+    if (!initialized) WiFi.mode(WIFI_OFF);
+    return;
+  }
   initialized = true;
   WiFi.mode(WIFI_STA);
   sntp_set_time_sync_notification_cb(onTimeSync);
@@ -53,9 +65,21 @@ void wifiServiceInit() {
   memset(&stored, 0, sizeof(stored));
   if (savedCredentials) { WiFi.begin(); connectStarted = millis(); state = WifiServiceState::Connecting; }
 }
+#if RADAR_UI_TRIAL
+bool wifiServicePrepareOfflineChannel(uint8_t channel) {
+  wifi_mode_t mode = WIFI_MODE_NULL;
+  wifi_ap_record_t ap{};
+  uint8_t primary = 0;
+  wifi_second_chan_t secondary = WIFI_SECOND_CHAN_NONE;
+  return initialized && esp_wifi_get_mode(&mode) == ESP_OK && mode == WIFI_MODE_STA &&
+         esp_wifi_sta_get_ap_info(&ap) == ESP_ERR_WIFI_NOT_CONNECT &&
+         esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE) == ESP_OK &&
+         esp_wifi_get_channel(&primary, &secondary) == ESP_OK && primary == channel;
+}
+#endif
 void wifiServiceSetServerOriginHandler(bool (*handler)(const char *)) { originHandler = handler; }
 void wifiServiceBeginPortal() {
-  if (active) return;
+  if (RADAR_UI_TRIAL || active) return;
   wifiServiceInit();
   static const char alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   for (unsigned i = 0; i < sizeof(portalPassword)-1; ++i) portalPassword[i] = alphabet[esp_random() & 31];
@@ -68,7 +92,7 @@ void wifiServiceBeginPortal() {
   active = true; started = millis(); state = WifiServiceState::Provisioning;
 }
 void wifiServiceUpdate() {
-  if (!initialized) return;
+  if (RADAR_UI_TRIAL || !initialized) return;
   const uint32_t now = millis();
   if (active) {
     dns.processNextRequest(); server.handleClient();
@@ -91,6 +115,7 @@ bool wifiServicePortalActive() { return active; }
 const char *wifiServicePortalPassword() { return active ? portalPassword : ""; }
 WifiServiceState wifiServiceState() { return state; }
 const char *wifiServiceStatusText() {
+  if (RADAR_UI_TRIAL) return "BANCO OFFLINE";
   switch (state) {
     case WifiServiceState::Connecting: return "CONNESSIONE";
     case WifiServiceState::Connected: return "CONNESSO";

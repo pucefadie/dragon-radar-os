@@ -12,3 +12,11 @@ double radarWrapDegrees(double degrees);
 double radarDistanceMeters(RadarPosition from, RadarPosition to);
 double radarBearingDegrees(RadarPosition from, RadarPosition to);
 RadarProjection radarProject(double distance, double bearing, double up, double range, double radius);
+struct RadarFix {
+  RadarPosition position;
+  uint32_t age_ms;
+  uint8_t quality;
+  bool valid;
+};
+bool radarValidPosition(RadarPosition position);
+bool radarUsableFix(const RadarFix &fix);

@@ -19,13 +19,13 @@ void appSettingsActivate() {
     case 0: s.brightness = s.brightness >= 225 ? 50 : s.brightness + 35; displaySetBrightness(s.brightness); break;
     case 1: s.volume = (s.volume + 25) % 125; break;
     case 2: s.vibration = !s.vibration; if (!s.vibration) motorStop(); break;
-    case 3: s.demo = !s.demo; break;
+    case 3: s.radar_mode = nextRadarMode(s.radar_mode); break;
     case 4: s.heading_up = !s.heading_up; break;
     case 5: if (magCalIsInProgress()) magCalStop(true); else magCalStart(); return;
     case 6: wifiServiceBeginPortal(); return;
     case 7: s.mount_offset = s.mount_offset >= 165 ? -180 : s.mount_offset + 15; break;
     case 8: s.declination = s.declination >= 30 ? -30 : s.declination + 1; break;
-    case 9: if (otaServiceActive()) otaServiceStop(); else otaServiceStart(); return;
+    case 9: return;
     case 11: s.sound = !s.sound; break;
     case 12: if (!otaServiceActive()) standbyRequested = true; return;
     case 13: if (!restartConfirm) { restartConfirm = true; return; } restartConfirm = false; restartRequested = true; return;
