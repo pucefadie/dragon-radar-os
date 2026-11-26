@@ -76,3 +76,21 @@ esptool --chip esp32s3 --port PORTA_RADAR --before no-reset --after no-reset wri
 - **Ripristino del firmware originale.** Con autorizzazione separata, scrivere in ROM tutto `original-0x10000.bin` a `0x10000`, quindi leggere e confrontare l’intero slot prima di cambiare avvio. Scrivere `original-0xe000.bin` a `0xe000` solo dopo il readback riuscito, verificare l’intera otadata (rende OTA0 la selezione stabile), poi avviare. La scrittura full-slot ripristina anche il settore di rilascio. Nessuna scrittura di NVS, FAT, tabella, loader o eFuse.
 - **Ritorno al banco precedente a M3f.** Se anche OTA1 è stata aggiornata, ripristinare `baseline-0x310000.bin` con la verifica full-slot, quindi `baseline-0xe000.bin` per riselezionare OTA1. Se si vuole riportare *l’intera coppia* di app allo stato prima di M3f, ripristinare e verificare anche `original-0x10000.bin` prima dell’otadata. Stesse opzioni ROM dell’esempio, cambia solo la coppia offset/file autorizzata.
 - **Prova da banco.** Verificare nessun AP al boot, avvio su richiesta, password, annulla e timeout, rifiuto per firma/target/versione/immagine alterati, upload funzionante in entrambi i sensi, attività DRA1 dopo chiusura e stato VALID dopo avvio. Per il rollback fisico predisporre una variante privata che fallisca l’autoverifica e osservarne l’esecuzione solo previa autorizzazione. Le prove di reset e perdita di alimentazione durante il trasferimento o PENDING_VERIFY sono sessioni separate. Confrontare a livello logico DRC1/DRC2 e impostazioni, tenendo conto delle normali attività PHY. C6 resta in v332.
+
+### Sequenza delle prove wireless
+
+| Prova autorizzata singolarmente | App in esecuzione | Destinazione inattiva | Riscontro atteso |
+|---|---|---|---|
+| Prima release | v1 in OTA1, seq 4 VALID | v2 in OTA0 a `0x10000` | v2 seq 5 VALID in `0xe000`, v1 e record seq 4 preservati |
+| Direzione inversa | v2 in OTA0, seq 5 VALID | v3 in OTA1 a `0x310000` | v3 seq 6 VALID in `0xf000`, v2 e record seq 5 preservati |
+| Rollback intenzionale | v3 in OTA1, seq 6 VALID | fixture privata v4 in OTA0 | v4 seq 7 INVALID in `0xe000`, ritorno automatico a v3 seq 6 VALID |
+
+Queste sequenze valgono a partire dai record 3 e 4 descritti sopra e in assenza di altri cambi di selezione. Prima di ogni invio riconfermare slot, sequenza, stato VALID, profilo flash e hash dell’app effettiva. Preparare e verificare una build UI Trial v3 con lo stesso core, layout e descrittore M3f per la direzione inversa. La fixture v4 dovrà rifiutare deliberatamente **solo** l’autoverifica del proprio primo boot in PENDING_VERIFY, prima di qualsiasi conferma. Firmare la fixture con il manifest della singola sessione dopo autorizzazione dedicata.
+
+Dopo ciascuna prova verificare readback dell’app, entrambi i record OTA, confronto logico NVS e associazioni, ripresa DRA1 e settore di rilascio `0x30f000` byte per byte. Per v2 i 432 settori dell’app terminano a `0x1bffff`. Il limite in codice arrotonda sempre entro l’area che precede il settore di rilascio. Dopo rollback, il monitor e la lettura ROM devono confermare l’esecuzione di v3, non soltanto una risposta HTTP positiva o la presenza di due slot.
+
+### Stato al termine della prima installazione
+
+La v1 è stata scritta in OTA1 a `0x310000` e riletta byte per byte. I due nuovi dump da 16 MiB e tutti i file di recupero sono verificati e conservati in locale. Il controllo delle regioni esterne alla scrittura ha confermato OTA0 originale, otadata, NVS, FAT, loader, tabella e coredump preservati. Il settore di rilascio è ancora quello originale.
+
+Riprendere con un avvio normale e il monitor USB del radar. Verificare PSRAM, separazione da AP, DRA1 con la sfera operativa e confronto NVS. Dal launcher aprire **Debug → Aggiornamenti OTA** (pagina 15/15). In **Sfera** selezionare ID 1 e leggere la versione. In **Radar** verificare **Attiva OTA → Conferma**, il messaggio **OTA0 ORIGINALE PROTETTA** e modalità Wi-Fi STA ancora attiva, con AP assente. Registrare separatamente il riscontro dell’operatore su touch e leggibilità. L’autorizzazione alla scrittura del settore di rilascio arriva dopo queste prove.

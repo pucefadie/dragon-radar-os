@@ -60,4 +60,4 @@ Per ciascun commit significativo: aggiornare `STATUS.md` con versione/branch, ev
 
 - **Software** selettore Radar/Sfera in Debug, AP DragonRadar su conferma locale, manifest HMAC di sessione, upload da PC, avanzamento, annullamento e validazione al boot.
 - **Migrazione** OTA0 originale protetta per impostazione iniziale. Il passaggio a due slot operativi richiede una migrazione USB separata, con backup full-slot e recupero ROM verificati offline. Il firmware delle sfere resta invariato.
-- **Collaudo aperto** avvio M3f in OTA1 con OTA0 protetta, poi sessioni autorizzate per AP, aggiornamento nei due sensi, rollback fisico e confronto delle associazioni e impostazioni. [Procedura OTA radar](RADAR_OTA.md)
+- **Banco** preflight, doppio backup, installazione UI Trial v1 in OTA1 e readback integrale PASS. Alla ripresa da USB eseguire primo avvio, verifiche UI/DRA1/NVS, assenza AP e blocco OTA0. Restano da autorizzare il settore di rilascio e i trasferimenti wireless nei due sensi con rollback fisico. [Procedura OTA radar](RADAR_OTA.md)
