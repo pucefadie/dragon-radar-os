@@ -35,3 +35,10 @@ Non è dimostrato che questo difetto causasse i transitori Lost osservati fisica
 - Suite host estesa con app-manager, gesture e standby-button: 14 gruppi PASS, exit 0. Nessuna prova fisica.
 - La build S3 UI Trial avviata nella prima sessione usa lo staging precedente alla correzione launcher: anche se passa, NON valida il secondo intervento. Ricompilare da HEAD in una nuova directory.
 - Integrare entrambi i commit del branch, in ordine, su una copia pulita. Nessun push effettuato.
+
+
+## Terzo checkpoint: specifica grafica M2d e risultato build
+- Specifica dettagliata in RADAR_UI_SPEC_20261128.md. L'utente ha scelto la specifica tecnica (opzione B), non l'implementazione in questo checkpoint.
+- Build S3 UI Trial del primo intervento RSSI: PASS, exit 0, core 3.3.12. Sketch 1.765.863 byte (56%), RAM globale 72.948 byte (22%). BIN 1.766.016 byte, SHA-256 a86a1b260c755d2335e606a8ace482590b50e35310c7b5d3a60e06ed93b1d45a. Percorso locale build/review-20261128-ui/artifacts/dragon_radar_sketch.ino.bin. Non include launcher ea4e3e8; NON installare.
+- Commit precedenti: 5b124fa RSSI; ea4e3e8 launcher. Suite host finale 14 gruppi PASS. La nuova specifica non cambia sorgenti né risultati di test.
+- Ripresa: integrare i commit in ordine dal branch review/offline-20261128 su worktree pulito, leggere la specifica M2d, implementare helper puro + renderer Chiuso con test, compilare candidati distinti. Preservare Demo/Aperto e gate M3f hardware. Nessun merge automatico.

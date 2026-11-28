@@ -566,3 +566,9 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **PASS host**: sincronizzazione selezione app corrente all'apertura launcher tramite swipe. Test RED prima della modifica e GREEN dopo. Suite estesa a 14 gruppi PASS, inclusi gesture e standby-button.
 - **NOT RUN**: build firmware del secondo intervento e prove fisiche. La compilazione precedente usa staging antecedente alla modifica launcher; non costituisce una sua validazione.
 - Handoff aggiornato in CODEX_HANDOFF_20261128.md; integrare entrambi i commit del branch isolato. Nessun push, flash o accesso hardware.
+
+
+### Terzo checkpoint offline — specifica grafica M2d
+- **PASS build S3 UI Trial del primo intervento RSSI**: core 3.3.12, exit 0, sketch 1.765.863 byte (56%), RAM globale 72.948 byte (22%); BIN 1.766.016 byte, SHA-256 a86a1b260c755d2335e606a8ace482590b50e35310c7b5d3a60e06ed93b1d45a. Non include ea4e3e8; non è candidato autorizzato per flash/OTA.
+- **SPEC** RADAR_UI_SPEC_20261128.md: Chiuso con sfera centrale 12–68 px di raggio, scala relativa RSSI, stati assenza/segnale perso/trovata, leggibilità e coordinate touch preservate. Specifica, non codice implementato.
+- **NOT RUN** build contenente launcher e nuova UI, collaudo hardware e OTA. Nessun hardware contattato. Integrare i commit del branch isolato, implementare M2d con test, ricompilare e mantenere il gate di banco M3f.
