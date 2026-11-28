@@ -594,3 +594,5 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 ### Settimo checkpoint — sfera a tutto reticolo
 - Build S3 UI Trial v4 e v5 precedenti entrambe PASS, exit 0. v4 sketch 1.768.891 byte, SHA256 f9a1194d41e9cfbf25dc5c8f79991ab7959422fdb3f7e8bb442e67c41908b390; v5 sketch 1.769.131 byte, SHA256 391f35b2ca9496a0ce2e085433dcb0cf635bf3a69dc3609922c0bc1da99d00a2. RAM globale 72.964 byte per entrambe. Non installate.
 - Su richiesta utente, raggio massimo sfera 190 px (diametro 380 px), esattamente il cerchio esterno del reticolo; raggio minimo 12. Stelle limitate alla zona centrale e HUD in primo piano. Test geometria PASS; nuova build S3 v6 da verificare separatamente. Nessun flash/OTA o collaudo fisico.
+
+- **PASS build S3 UI Trial v6**, sorgenti 4140542, core 3.3.12, exit 0. Sketch 1.769.155 byte (56%), RAM globale 72.964 byte (22%), BIN 1.769.296 byte, SHA-256 f7bbf50f485633518723ddf60c4417e6fffe6d6974ee47d56ec2293bb51cbd46. Suite host 16/16 PASS. Artefatti locali build/review-20261128-graphics-v6/artifacts/. Nessun flash, OTA, firma o collaudo fisico autorizzato/eseguito.

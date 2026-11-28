@@ -67,3 +67,6 @@ Non è dimostrato che questo difetto causasse i transitori Lost osservati fisica
 ## Settimo checkpoint — scala sfera corretta
 - Base 83b86b4; utente richiede diametro della sfera al 100% pari al reticolo esterno (380 px). Implementata scala arrotondata r=12..190, costante condivisa con renderer; stelle entro banda centrale non coperta dal HUD. Test geometrico PASS, incluso tutti i raggi interi da 24 a 190. Demo/Aperto e radio invariati.
 - Build v4/v5 PASS, ma entrambe antecedenti alla nuova scala. Per v6 usare RADAR_OTA_VERSION=6, output build/review-20261128-graphics-v6; verificare esito e binario prima di qualsiasi collaudo autorizzato. Nessuna installazione.
+
+### Esito build v6
+PASS, exit 0, sorgenti 4140542, Arduino ESP32 3.3.12. BIN locale build/review-20261128-graphics-v6/artifacts/dragon_radar_sketch.ino.bin, 1.769.296 byte, SHA-256 f7bbf50f485633518723ddf60c4417e6fffe6d6974ee47d56ec2293bb51cbd46. Sketch 1.769.155 byte; RAM globale 72.964 byte. Suite host 16 gruppi PASS. Candidato compilato, non installato né firmato; preservare gate M3f e OTA0. Nessun test fisico.
