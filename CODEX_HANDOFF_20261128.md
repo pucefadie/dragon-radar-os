@@ -26,3 +26,12 @@ Non è dimostrato che questo difetto causasse i transitori Lost osservati fisica
 2. Integrare solo il commit di questo branch (cherry-pick su un worktree aggiornato e pulito); non sovrascrivere il worktree principale sporco.
 3. Rieseguire suite host, completare build dei profili e collaudo M3f v1 già installata, dopo autorizzazione USB. La nuova build di revisione non è un aggiornamento autorizzato.
 4. Indagare separatamente i drop RX/TX e i retry DRA1 correlando log temporali e contatori; non attribuirli alla correzione RSSI senza evidenza.
+
+
+## Secondo intervento: launcher e navigazione
+- Base del secondo intervento: 5b124fa. In src/app_manager.cpp, l'apertura del launcher via SwipeUp non aggiornava selected, a differenza di longPress; una successiva conferma fisica poteva aprire un'app diversa da quella corrente.
+- Correzione: sincronizzare selected con current all'apertura via swipe; mantenute coordinate, gesture e comportamento del pulsante.
+- RED: nuovo test app_manager_test.cpp fallisce sul codice precedente. GREEN: selezione corretta da Debug, riapertura, ciclo selezione con shortPress e conferma longPress.
+- Suite host estesa con app-manager, gesture e standby-button: 14 gruppi PASS, exit 0. Nessuna prova fisica.
+- La build S3 UI Trial avviata nella prima sessione usa lo staging precedente alla correzione launcher: anche se passa, NON valida il secondo intervento. Ricompilare da HEAD in una nuova directory.
+- Integrare entrambi i commit del branch, in ordine, su una copia pulita. Nessun push effettuato.

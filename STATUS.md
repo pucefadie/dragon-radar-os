@@ -560,3 +560,9 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **NOT RUN / da completare** build degli altri profili, collaudi hardware, OTA e misure dei drop/retry radio. Nessun dispositivo contattato. La modifica non dimostra la causa dei transitori Lost fisici.
 - Build S3 UI Trial avviata su ESP32 Arduino 3.3.12 nel worktree isolato; risultato non ancora disponibile alla stesura di questo checkpoint.
 - Handoff: `CODEX_HANDOFF_20261128.md`. Ripresa: integrare il commit in un worktree aggiornato e pulito; rieseguire regressioni e build, poi riprendere il collaudo M3f v1 già installato solo su autorizzazione. Non rilasciare OTA0.
+
+
+### Secondo intervento offline — launcher
+- **PASS host**: sincronizzazione selezione app corrente all'apertura launcher tramite swipe. Test RED prima della modifica e GREEN dopo. Suite estesa a 14 gruppi PASS, inclusi gesture e standby-button.
+- **NOT RUN**: build firmware del secondo intervento e prove fisiche. La compilazione precedente usa staging antecedente alla modifica launcher; non costituisce una sua validazione.
+- Handoff aggiornato in CODEX_HANDOFF_20261128.md; integrare entrambi i commit del branch isolato. Nessun push, flash o accesso hardware.

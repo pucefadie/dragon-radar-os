@@ -29,4 +29,17 @@ int main() {
   a.shortPress(); assert(a.debugPage()==1);
   for (unsigned i=1;i<DEBUG_PAGE_COUNT;++i) a.shortPress();
   assert(a.debugPage()==0);
+
+  // The touchscreen launcher must select the current app, just like longPress.
+  e.type=Gesture::SwipeUp; e.x=230; e.y=420; a.gesture(e);
+  assert(a.launcherOpen() && a.selection()==3);
+  a.longPress();
+  assert(a.active()==AppId::Debug && !a.launcherOpen());
+  a.showDebugPage(2);
+  a.gesture(e);
+  assert(a.selection()==3);
+  a.shortPress();
+  assert(a.selection()==0);
+  a.longPress();
+  assert(a.active()==AppId::Radar && !a.launcherOpen());
 }
