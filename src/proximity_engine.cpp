@@ -13,6 +13,9 @@ void ProximityEngine::sample(int8_t rssi, uint32_t received, uint32_t now) {
   const uint32_t age = now - received;
   if (suspended_ || age >= cfg_.stale_ms || rssi >= 0 || rssi == INT8_MIN) return;
   if (resumePending_ && age > now - resumedAt_) return;
+  // Compare ages against the same clock, including across millis() wrap.
+  // An older or equal timestamp must not reset or bias an active filter.
+  if (valid_ && age >= now - lastSample_) return;
   resumePending_ = false;
   const bool first = !valid_ || received - lastSample_ >= cfg_.stale_ms;
   if (first) {

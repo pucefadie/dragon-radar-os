@@ -550,3 +550,13 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **NOT RUN collaudo v1.** Dispositivi scollegati dal PC. Da verificare dopo avvio normale display, risposta touch, leggibilità, PSRAM, gioco, DRA1 Paired con v332, menu Radar/Sfera, blocco OTA0, radio STA senza AP e confronto NVS dopo l’avvio. I riscontri PSRAM, GPIO e display precedenti alla scrittura appartengono alla baseline precedente. C6 osservata passivamente prima del flash S3, senza operazioni sul firmware.
 - **PASS preparazione offline, NOT RUN rilascio.** V2 riverificata con SHA-256 `2ec7a88f30dc0975fd5f76413e1e92465f37400671daa3a60f4a4413bfa2f5a3`. Piano v1 → v2, direzione inversa e fixture rollback in [RADAR_OTA.md](RADAR_OTA.md). Il settore `0x30f000` conserva il contenuto originale. Il rilascio richiederà un’autorizzazione specifica dopo il collaudo v1, perché il successivo OTA sostituirà l’app originale in OTA0.
 - **Ripresa 26 novembre, banco in attesa.** Windows esponeva soltanto COM5. L’enumerazione per identità USB non ha trovato né il radar S3 né la sfera C6. Verificati di nuovo gli hash dei due dump, dei file di recupero e del readback v1. L’app resta verificata in OTA1 dal collaudo precedente. Alla prossima connessione del radar, riprendere dalla verifica d’avvio della v1 già installata.
+
+
+## Revisione offline 28 novembre 2026 — ChatGPT / Desktop Commander
+
+- Branch locale `review/offline-20261128`, base `1ed0358`, worktree separato. Repository principale e modifiche locali preesistenti preservati.
+- **PASS correzione RSSI**: campioni temporalmente precedenti o identici al campione valido non modificano il filtro di prossimità. Test nuovo RED prima della modifica; GREEN dopo la correzione. Conservati timeout e gestione rollover.
+- **PASS host**: 11 gruppi in `scripts/review_offline_host.sh`, inclusi ASan/UBSan, 147 campioni validi e 294 vecchi/duplicati in sette filtri intercalati, DRA1, DEV e beacon. Exit 0.
+- **NOT RUN / da completare** build degli altri profili, collaudi hardware, OTA e misure dei drop/retry radio. Nessun dispositivo contattato. La modifica non dimostra la causa dei transitori Lost fisici.
+- Build S3 UI Trial avviata su ESP32 Arduino 3.3.12 nel worktree isolato; risultato non ancora disponibile alla stesura di questo checkpoint.
+- Handoff: `CODEX_HANDOFF_20261128.md`. Ripresa: integrare il commit in un worktree aggiornato e pulito; rieseguire regressioni e build, poi riprendere il collaudo M3f v1 già installato solo su autorizzazione. Non rilasciare OTA0.

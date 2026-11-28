@@ -141,7 +141,47 @@ int main() {
   assert(search.foundCount()==0 && search.associated()==0x7f && search.select(1));
   assert(!search.snapshot(1,10034).fresh && search.confirm(10034,true)==SearchEvent::None);
 
+  // Delayed ACKs must not rewind the filter or artificially refresh its history.
+  ProximityEngine reordered;
+  reordered.sample(-65, 1000, 1000);
+  reordered.sample(-55, 4000, 4000);
+  const auto newest = reordered.snapshot(4100);
+  reordered.sample(-100, 3000, 4100);
+  const auto afterOld = reordered.snapshot(4100);
+  assert(afterOld.raw == newest.raw && afterOld.filtered == newest.filtered);
+  assert(afterOld.age_ms == newest.age_ms && afterOld.level == newest.level);
+  reordered.sample(-100, 4000, 4200);
+  assert(reordered.snapshot(4200).raw == newest.raw);
+  assert(reordered.snapshot(14000).state == State::Lost);
+
+  // Interleave seven peers; delayed samples for one peer cannot disturb others.
+  SphereSearch interleaved;
+  interleaved.setAssociated(0x7f);
+  ProximityEngine ordered[SphereSearch::count];
+  for (uint32_t t=1000; t<=61000; t+=3000) {
+    for (uint8_t id=1; id<=SphereSearch::count; ++id) {
+      const auto signal = int8_t(-90 + id*5 + int((t/3000)%5));
+      const uint32_t rx = t + id;
+      ordered[id-1].sample(signal, rx, t+10);
+      interleaved.sample(id, signal, rx, t+10);
+      interleaved.sample(id, -110, rx-100, t+10);
+      interleaved.sample(id, -10, rx, t+10);
+    }
+    for (uint8_t id=1; id<=SphereSearch::count; ++id) {
+      const auto expected = ordered[id-1].snapshot(t+10);
+      const auto actual = interleaved.snapshot(id, t+10);
+      assert(actual.raw == expected.raw && actual.filtered == expected.filtered);
+      assert(actual.age_ms == expected.age_ms && actual.level == expected.level);
+      assert(actual.state == expected.state && actual.fresh == expected.fresh);
+    }
+  }
+
   ProximityEngine wrap;
   wrap.sample(-74, UINT32_MAX - 1000, UINT32_MAX - 1000);
   assert(wrap.snapshot(999).age_ms == 2000 && wrap.snapshot(999).fresh);
+  wrap.sample(-68, 999, 999);
+  wrap.sample(-100, UINT32_MAX - 500, 1000);
+  assert(wrap.snapshot(1000).raw == -68 && wrap.snapshot(1000).age_ms == 1);
+  wrap.sample(-60, 12000, 12000);
+  assert(wrap.snapshot(12000).filtered == -60);
 }
