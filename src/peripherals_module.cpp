@@ -154,6 +154,8 @@ const char *motorPatternToString(MotorPattern pattern) {
       return "MEDIUM_250MS";
     case MOTOR_PATTERN_TRIPLE_100_120MS:
       return "TRIPLE_3x100MS";
+    case MOTOR_PATTERN_DOUBLE_100_120MS:
+      return "DOUBLE_2x100MS";
     case MOTOR_PATTERN_BUTTON_FEEDBACK:
       return "BTN_FEEDBACK_100MS";
     case MOTOR_PATTERN_CUSTOM_PULSE:
@@ -354,6 +356,13 @@ bool motorStartPattern(MotorPattern pattern) {
       s_pattern_step_count = 1;
       break;
 
+    case MOTOR_PATTERN_DOUBLE_100_120MS:
+      s_pattern_steps[0] = {true, 100};
+      s_pattern_steps[1] = {false, 120};
+      s_pattern_steps[2] = {true, 100};
+      s_pattern_step_count = 3;
+      break;
+
     case MOTOR_PATTERN_TRIPLE_100_120MS:
       s_pattern_steps[0] = {true, 100};
       s_pattern_steps[1] = {false, 120};
@@ -432,6 +441,10 @@ bool motorTriggerMediumPulse() {
 
 bool motorTriggerTriplePulse() {
   return motorStartPattern(MOTOR_PATTERN_TRIPLE_100_120MS);
+}
+
+bool motorTriggerDoublePulse() {
+  return motorStartPattern(MOTOR_PATTERN_DOUBLE_100_120MS);
 }
 
 void motorSetButtonFeedbackEnabled(bool enabled) {

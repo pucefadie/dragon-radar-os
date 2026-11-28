@@ -38,9 +38,13 @@ SecureEspNow secure(secureTx);
 bool secureReady=false;
 #if CONFIG_IDF_TARGET_ESP32S3
 SphereSearch sphereSearch;
+uint32_t proximityEpoch=0;
 uint8_t pendingFoundRgb=0;
 void observeProximity(uint8_t id, SecureRxEvent event, int8_t rssi, uint32_t received) {
-  if (event==SecureRxEvent::SessionStarted) sphereSearch.invalidate(id);
+  if (event==SecureRxEvent::SessionStarted) {
+    sphereSearch.invalidate(id);
+    if (id==sphereSearch.selected()) ++proximityEpoch;
+  }
   else if (event==SecureRxEvent::ProbeAck) sphereSearch.sample(id,rssi,received,millis());
 }
 #endif
@@ -188,7 +192,10 @@ SphereGameView beaconServiceSphereGame() {
 
 bool beaconServiceSelectSphere(uint8_t id) {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
-  return sphereSearch.select(id);
+  const uint8_t previous=sphereSearch.selected();
+  const bool selected=sphereSearch.select(id);
+  if (selected && previous!=id) ++proximityEpoch;
+  return selected;
 #else
   (void)id;
   return false;
@@ -198,6 +205,7 @@ bool beaconServiceSelectSphere(uint8_t id) {
 void beaconServiceNewGame() {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   sphereSearch.newGame();
+  ++proximityEpoch;
   pendingFoundRgb=0;
 #endif
 }
@@ -209,9 +217,17 @@ ProximitySnapshot beaconServiceProximity() {
   return {};
 #endif
 }
+uint32_t beaconServiceProximityEpoch() {
+#if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
+  return proximityEpoch;
+#else
+  return 0;
+#endif
+}
 void beaconServiceSetProximitySuspended(bool suspended) {
 #if CONFIG_IDF_TARGET_ESP32S3 && !RADIO_DEV_INSECURE && !defined(RADIO_RX_HOST_TEST)
   sphereSearch.setSuspended(suspended,millis());
+  ++proximityEpoch;
   if (suspended) { pendingFoundRgb=0; secure.cancelMotorRequest(); }
 #else
   (void)suspended;

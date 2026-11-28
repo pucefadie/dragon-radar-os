@@ -64,7 +64,7 @@ Colori, raggio massimo 68, soglia per stelle, testo breve e assenza di pulsazion
 
 
 ## 8. Feedback aptico direzionale in Reale Chiuso — richiesta utente
-Stato: SPEC, non implementato. Vibra il radar S3 in mano all'utente, non il motore della sfera remota. Il feedback remoto al ritrovamento rimane invariato.
+Stato: IMPLEMENTATO per i due pattern direzionali, test host PASS; build S3 v3 da verificare e collaudo fisico NOT RUN. Vibra il radar S3 in mano all'utente, non il motore della sfera remota. Il feedback remoto al ritrovamento rimane invariato.
 
 - Usare lo stesso livello RSSI filtrato e con isteresi della grafica (1..15). Percentuale relativa p=100*level/15; fascia intera b=(10*level)/15 con divisione intera, 0..10. Il livello 0 significa assenza, non distanza massima. La percentuale non è una misura in metri.
 - Attraversamento di una o più soglie del 10% verso l'alto: un impulso di 100 ms. Verso il basso: due impulsi di 100 ms separati da 120 ms OFF. Segnale stabile: silenzio. Un salto multiplo produce un solo pattern; nessuna coda di impulsi.

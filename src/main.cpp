@@ -1022,6 +1022,7 @@ void loop() {
     displaySetBrightness(settingsGet().brightness);
   } else if (g_standbyButton.shouldEnter(powerButton.pressed,powerButton.current_hold_ms,otaServiceActive())) {
     motorStop(); displaySetBrightness(0);
+    appRadarResetDirectionalHaptic();
     g_standbyButton.entered(true); g_standby = true;
     beaconServiceSetProximitySuspended(true);
     return;
@@ -1099,12 +1100,18 @@ void loop() {
   if (appSettingsConsumeStandby() && !otaServiceActive()) {
     motorStop();
     displaySetBrightness(0);
+    appRadarResetDirectionalHaptic();
     g_standbyButton.entered(buttonGetStatus().pressed);
     g_standby = true;
     beaconServiceSetProximitySuspended(true);
     return;
   }
   if (appSettingsConsumeRestart() && !otaServiceActive()) ESP.restart();
+
+  if (g_apps.launcherOpen() || g_apps.active()!=AppId::Radar ||
+      settingsGet().radar_mode!=RadarMode::Closed || !settingsGet().vibration ||
+      otaServiceActive() || !displayIsInitialized())
+    appRadarResetDirectionalHaptic();
 
   // Refresh TCA9554 register snapshot every 500 ms
   static uint32_t last_tca_ms = 0;

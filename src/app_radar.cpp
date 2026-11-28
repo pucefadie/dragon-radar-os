@@ -10,6 +10,7 @@
 static constexpr uint16_t scales[] = {25,50,100,250,500,1000,2000};
 namespace {
 DemoProvider demo;
+DirectionHapticGate directionalHaptic;
 RadarPosition locations[SphereSearch::count]{};
 uint8_t savedPositions=0, lastSavedId=0;
 uint32_t lastSaveMs=0;
@@ -129,7 +130,20 @@ RadarView appRadarUpdate(const RadarSystemSnapshot &snap) {
   }
   return v;
 }
+void appRadarResetDirectionalHaptic() { directionalHaptic.reset(); }
 void appRadarHaptic(const RadarView &v, uint32_t now) {
+  if (!v.demo && !v.open) {
+    const auto game=beaconServiceSphereGame();
+    const auto &signal=v.proximity;
+    const bool valid=settingsGet().vibration && signal.fresh &&
+        signal.state!=ProximityState::Found &&
+        beaconServiceSecureLinkStatus()==SecureLinkStatus::Paired;
+    const auto event=directionalHaptic.update(valid,game.selected,
+        beaconServiceProximityEpoch(),signal.level,now,
+        motorGetStatus().pattern_running || !motorGetStatus().initialized);
+    if (event==DirectionHaptic::Approach) motorTriggerShortPulse();
+    else if (event==DirectionHaptic::Retreat) motorTriggerDoublePulse();
+  } else appRadarResetDirectionalHaptic();
   static uint8_t zone = 0; static uint32_t last = 0; static bool reached = false;
   if (!settingsGet().vibration || !v.demo || v.nearest_m < 0 || !isfinite(v.nearest_m)) { zone = 0; reached = false; return; }
   zone = radarProximityZone(zone, v.nearest_m);

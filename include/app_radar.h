@@ -30,3 +30,4 @@ RadarView appRadarUpdate(const RadarSystemSnapshot &snapshot);
 void appRadarZoom();
 void appRadarApproach();
 void appRadarHaptic(const RadarView &view, uint32_t now);
+void appRadarResetDirectionalHaptic();

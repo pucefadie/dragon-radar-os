@@ -71,7 +71,8 @@ enum MotorPattern : uint8_t {
   MOTOR_PATTERN_MEDIUM_250MS,     // 2. Impulso medio di 250 ms
   MOTOR_PATTERN_TRIPLE_100_120MS, // 3. Sequenza 3 x (100 ms ON / 120 ms OFF)
   MOTOR_PATTERN_BUTTON_FEEDBACK,  // 4. Attivazione su pressione del pulsante
-  MOTOR_PATTERN_CUSTOM_PULSE      // Impulso singolo custom (sempre limitato a <= 1000 ms)
+  MOTOR_PATTERN_CUSTOM_PULSE,     // Impulso singolo custom (sempre limitato a <= 1000 ms)
+  MOTOR_PATTERN_DOUBLE_100_120MS   // 2 x 100 ms ON, separated by 120 ms OFF
 };
 
 struct MotorStatus {
@@ -239,6 +240,7 @@ bool motorStartPattern(MotorPattern pattern);
 bool motorTriggerShortPulse();   // Pattern 1: 100 ms ON
 bool motorTriggerMediumPulse();  // Pattern 2: 250 ms ON
 bool motorTriggerTriplePulse();  // Pattern 3: 3 x (100 ms ON / 120 ms OFF)
+bool motorTriggerDoublePulse();  // 100 ms ON / 120 ms OFF / 100 ms ON
 void motorSetButtonFeedbackEnabled(bool enabled);
 bool motorIsButtonFeedbackEnabled();
 bool motorIsActive();

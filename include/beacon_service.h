@@ -16,6 +16,7 @@ SphereGameView beaconServiceSphereGame();
 bool beaconServiceSelectSphere(uint8_t id);
 void beaconServiceNewGame();
 ProximitySnapshot beaconServiceProximity();
+uint32_t beaconServiceProximityEpoch();
 void beaconServiceSetProximitySuspended(bool suspended);
 SearchEvent beaconServiceConfirmSphereFound();
 void beaconServiceRequestSphereMotor();
