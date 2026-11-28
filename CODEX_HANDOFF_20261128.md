@@ -58,3 +58,8 @@ Non è dimostrato che questo difetto causasse i transitori Lost osservati fisica
 - Helper puro include/radar_ui_geometry.h e test tests/radar_ui_geometry_test.cpp: estremi, monotonia, clamp, stati e geometria non sovrapposta delle stelle per tutti gli ID. Suite host 16 gruppi PASS, exit 0. Non sono test di rendering fisico o frame rate.
 - Build S3 UI Trial v4 avviata: ARDUINO_DIRECTORIES_DATA=$HOME/.local/share/dragon-arduino/data ARDUINO_CLI=$HOME/.local/dragon-arduino-cli/arduino-cli RADAR_UI_TRIAL=1 RADAR_OTA_VERSION=4 bash scripts/build_linux.sh build/review-20261128-graphics-v4. Esito da verificare. Non installare né usare come OTA approvato. V4 comprende anche le correzioni precedenti e haptic.
 - Prossimo: verificare exit code e artefatti v4; test fisico autorizzato M3f v1 prima di nuovo candidato, misurare fluidità, contrasto e leggibilità; verificare touch e feedback aptico. Altri profili e hardware NOT RUN. Nessun merge automatico.
+
+
+## Sesto checkpoint — leggibilità launcher
+- Implementato size 2 nelle tile, etichette su due righe, contorno selezionato, istruzioni leggibili; coordinate e hit test condivisi via launcherTileAt/X/Y e costanti in app_manager.h. Tap nelle separazioni non apre app, pulsanti e gesture preservati.
+- Suite host 16 gruppi PASS, exit 0. La build v4 in corso è del renderer Chiuso prima di questo checkpoint, non contiene il nuovo launcher. Per candidato cumulativo usare RADAR_OTA_VERSION=5 e output nuovo (build/review-20261128-graphics-v5), non installare senza autorizzazione. Debug/Aperto non ridisegnati; banco NOT RUN.

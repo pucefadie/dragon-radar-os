@@ -585,3 +585,8 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **IMPLEMENTATO** renderer Chiuso dedicato: sfera al centro r=12..68, reticolo/scanner verde, stelle per ID, percentuale relativa RSSI, assenza/ricerca/perso/trovata, testi e comandi ad alto contrasto. Demo/Aperto e hitbox invariati. Nessuna modifica radio/OTA/C6.
 - **PASS host** 16 gruppi, exit 0; nuovi test geometria e stati, inclusa non sovrapposizione stelle per 7 ID. Build S3 UI Trial v4 avviata; esito da verificare. Nessun collaudo fisico/OTA, nessun accesso hardware.
 - Handoff aggiornato; verificare build v4, poi collaudo autorizzato M3f e UI. Conservare OTA0 e firmware operativo.
+
+### Sesto checkpoint offline — launcher leggibile e touch coerente
+- **IMPLEMENTATO**: etichette delle tile a size 2, nomi lunghi su due righe, selezione ad alto contrasto, istruzioni touch. Geometria condivisa tra AppManager e renderer: tap negli spazi vuoti non apre app.
+- **PASS host**: 16 gruppi, exit 0, inclusi test sui limiti delle tile e tap nelle separazioni.
+- Build v4 già avviata sullo snapshot 0709f11 precedente a questo intervento; non include il nuovo launcher. Build cumulativa v5 da eseguire/verificare separatamente. Nessun flash, OTA o prova fisica.

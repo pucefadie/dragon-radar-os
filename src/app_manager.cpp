@@ -2,8 +2,9 @@
 void AppManager::gesture(const GestureEvent &e) {
   if (launcher) {
     if (e.type == Gesture::SwipeDown) launcher = false;
-    else if (e.type == Gesture::Tap && e.x >= 75 && e.x < 391 && e.y >= 90 && e.y < 370) {
-      current = static_cast<AppId>((e.x >= 233 ? 1 : 0) + (e.y >= 230 ? 2 : 0)); launcher = false;
+    else if (e.type == Gesture::Tap) {
+      const int8_t tile=launcherTileAt(e.x,e.y);
+      if (tile>=0) { current=static_cast<AppId>(tile); launcher=false; }
     }
   } else if (e.type == Gesture::SwipeUp && e.y >= GESTURE_BOTTOM_EDGE) {
     selected = static_cast<uint8_t>(current);

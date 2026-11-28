@@ -28,6 +28,16 @@ inline bool debugSphereMotorTap(const GestureEvent &event) {
          event.y >= DEBUG_SPHERE_MOTOR_Y && event.y < DEBUG_SPHERE_MOTOR_Y+DEBUG_SPHERE_MOTOR_HEIGHT;
 }
 enum class AppId : uint8_t { Radar, Audiobookshelf, Settings, Debug };
+constexpr int16_t LAUNCHER_TILE_WIDTH=124, LAUNCHER_TILE_HEIGHT=112;
+constexpr int16_t launcherTileX(uint8_t id) { return id%2 ? 250 : 92; }
+constexpr int16_t launcherTileY(uint8_t id) { return id/2 ? 247 : 107; }
+inline int8_t launcherTileAt(int16_t x,int16_t y) {
+  for (uint8_t id=0;id<4;++id)
+    if (x>=launcherTileX(id) && x<launcherTileX(id)+LAUNCHER_TILE_WIDTH &&
+        y>=launcherTileY(id) && y<launcherTileY(id)+LAUNCHER_TILE_HEIGHT)
+      return int8_t(id);
+  return -1;
+}
 class AppManager {
  public:
   void gesture(const GestureEvent &event);

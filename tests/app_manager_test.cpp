@@ -42,4 +42,19 @@ int main() {
   assert(a.selection()==0);
   a.longPress();
   assert(a.active()==AppId::Radar && !a.launcherOpen());
+
+  for (uint8_t id=0;id<4;++id) {
+    const auto x=launcherTileX(id), y=launcherTileY(id);
+    assert(launcherTileAt(x,y)==id);
+    assert(launcherTileAt(x+LAUNCHER_TILE_WIDTH-1,y+LAUNCHER_TILE_HEIGHT-1)==id);
+    assert(launcherTileAt(x+LAUNCHER_TILE_WIDTH,y)==-1);
+    assert(launcherTileAt(x,y+LAUNCHER_TILE_HEIGHT)==-1);
+  }
+  a.longPress();
+  e.type=Gesture::Tap; e.x=233; e.y=150; a.gesture(e);
+  assert(a.launcherOpen() && a.active()==AppId::Radar);
+  e.x=300; e.y=230; a.gesture(e);
+  assert(a.launcherOpen() && a.active()==AppId::Radar);
+  e.y=270; a.gesture(e);
+  assert(!a.launcherOpen() && a.active()==AppId::Debug);
 }

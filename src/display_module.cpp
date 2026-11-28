@@ -1431,15 +1431,26 @@ void displayRenderOsScreen(uint8_t app, bool launcher, uint8_t selected) {
   d->drawCircle(233, 233, 222, RADAR_COLOR_GRID_MID);
   if (launcher) {
     drawCenteredText(d, 58, "APPLICAZIONI", RADAR_COLOR_GRID_BRIGHT, 2);
-    const char *names[] = {"DRAGON RADAR", "AUDIOBOOKSHELF", "SETTINGS", "DEBUG"};
-    for (int i = 0; i < 4; ++i) {
-      int x = (i % 2) ? 250 : 92, y = (i / 2) ? 247 : 107;
-      if (i == selected) d->fillRoundRect(x, y, 124, 112, 14, RADAR_COLOR_GRID_DARK);
-      d->drawRoundRect(x, y, 124, 112, 14, RADAR_COLOR_GRID_BRIGHT);
-      d->setTextColor(RADAR_COLOR_WHITE); d->setTextSize(1);
-      d->setCursor(x + (124 - (int)strlen(names[i]) * 6) / 2, y + 52); d->print(names[i]);
+    const char *line1[]={"DRAGON","AUDIOBOOK","IMPOSTAZ.","DEBUG"};
+    const char *line2[]={"RADAR","SHELF","",""};
+    for (uint8_t i=0;i<4;++i) {
+      const int x=launcherTileX(i), y=launcherTileY(i);
+      if (i==selected)
+        d->fillRoundRect(x,y,LAUNCHER_TILE_WIDTH,LAUNCHER_TILE_HEIGHT,14,RADAR_COLOR_GRID_DARK);
+      d->drawRoundRect(x,y,LAUNCHER_TILE_WIDTH,LAUNCHER_TILE_HEIGHT,14,
+                       i==selected?RADAR_COLOR_YELLOW:RADAR_COLOR_GRID_BRIGHT);
+      if (i==selected) d->drawRoundRect(x+2,y+2,LAUNCHER_TILE_WIDTH-4,LAUNCHER_TILE_HEIGHT-4,12,RADAR_COLOR_YELLOW);
+      d->setTextColor(RADAR_COLOR_WHITE); d->setTextSize(2);
+      d->setCursor(x+(LAUNCHER_TILE_WIDTH-int(strlen(line1[i]))*12)/2,y+(line2[i][0]?37:48));
+      d->print(line1[i]);
+      if (line2[i][0]) {
+        d->setCursor(x+(LAUNCHER_TILE_WIDTH-int(strlen(line2[i]))*12)/2,y+59);
+        d->print(line2[i]);
+      }
     }
-    drawCenteredText(d, 390, "BREVE: SCEGLI  LUNGO: APRI", RADAR_COLOR_GRID_MID, 1);
+    drawCenteredText(d, 376, "TOCCA PER APRIRE", RADAR_COLOR_WHITE, 2);
+    drawCenteredText(d, 402, "BREVE: SCEGLI", RADAR_COLOR_GRID_BRIGHT, 1);
+    drawCenteredText(d, 414, "LUNGO: APRI", RADAR_COLOR_GRID_BRIGHT, 1);
   } else if (app == 1) {
     drawCenteredText(d, 75, "AUDIOBOOKSHELF", RADAR_COLOR_GRID_BRIGHT, 2);
     drawCenteredText(d, 112, audiobookshelfStatusText(), RADAR_COLOR_WHITE, 2);
