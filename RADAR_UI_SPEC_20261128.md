@@ -1,6 +1,6 @@
 # M2d — specifica grafica Dragon Radar (ChatGPT, 2026-11-28)
 
-Stato: proposta tecnica pronta per implementazione, NON implementata né collaudata.
+Stato: renderer Chiuso implementato; 16 gruppi host PASS, build S3 UI Trial v4 da verificare. Collaudo fisico NOT RUN. Le proposte per launcher/Debug restano successive.
 Richiesta: migliorare leggibilità e fedeltà all'estetica del radar di Dragon Ball; in Reale Chiuso sostituire il triangolo rosso centrale con la sfera selezionata, che cresce all'avvicinamento.
 Base: 1ed0358 + 5b124fa (RSSI) + ea4e3e8 (launcher). Vedere CODEX_HANDOFF_20261128.md.
 

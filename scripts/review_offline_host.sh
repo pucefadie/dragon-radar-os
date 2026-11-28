@@ -16,6 +16,7 @@ run app-manager tests/app_manager_test.cpp src/app_manager.cpp
 run gesture tests/gesture_test.cpp src/gesture_manager.cpp
 run standby-button tests/standby_button_test.cpp
 run radar-feedback tests/radar_feedback_test.cpp
+run radar-ui-geometry tests/radar_ui_geometry_test.cpp
 run proximity tests/proximity_engine_test.cpp src/proximity_engine.cpp
 run proximity-sanitized -fsanitize=address,undefined -fno-omit-frame-pointer tests/proximity_engine_test.cpp src/proximity_engine.cpp
 run radio-link tests/radio_link_test.cpp src/radio_link.cpp src/beacon_protocol.cpp

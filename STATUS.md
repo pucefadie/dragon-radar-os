@@ -578,3 +578,10 @@ Checklist operatore per il successivo collaudo M2a, dopo la risoluzione del vinc
 - **IMPLEMENTATO** S3: singolo impulso 100 ms per fascia crescente, doppio 100/120/100 ms per fascia decrescente. Cooldown 1500 ms, gate Paired/fresh/selected/non Found/vibrazione, reset al cambio contesto o epoch. Nessuna coda di eventi; nessuna modifica a Demo/Aperto/C6. Lost/Found opzionali non implementati.
 - **PASS host** 15 gruppi, exit 0, incluso radar-feedback con test soglie, cooldown, busy, reset e rollover. Build S3 UI Trial v3 avviata; esito non ancora verificato. Nessun accesso hardware.
 - **NOT RUN** prova elettrica, collaudo fisico, altri profili, OTA. Grafica M2d ancora specifica. Handoff aggiornato.
+
+
+### Quinto checkpoint offline — grafica Chiuso M2d
+- **PASS build S3 UI Trial v3**: exit 0, core 3.3.12, sketch 1.766.403 byte, RAM globale 72.964 byte, BIN 1.766.544 byte SHA-256 bcb4187cf16a99bdef3ed98cd29f68c2bf58d61184796a76561959a239018de9. Non installato.
+- **IMPLEMENTATO** renderer Chiuso dedicato: sfera al centro r=12..68, reticolo/scanner verde, stelle per ID, percentuale relativa RSSI, assenza/ricerca/perso/trovata, testi e comandi ad alto contrasto. Demo/Aperto e hitbox invariati. Nessuna modifica radio/OTA/C6.
+- **PASS host** 16 gruppi, exit 0; nuovi test geometria e stati, inclusa non sovrapposizione stelle per 7 ID. Build S3 UI Trial v4 avviata; esito da verificare. Nessun collaudo fisico/OTA, nessun accesso hardware.
+- Handoff aggiornato; verificare build v4, poi collaudo autorizzato M3f e UI. Conservare OTA0 e firmware operativo.

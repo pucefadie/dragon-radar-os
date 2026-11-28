@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include "display_module.h"
 #include "app_radar.h"
+#include "radar_ui_geometry.h"
 #include "beacon_service.h"
 #include "app_settings.h"
 #include "app_manager.h"
@@ -1472,8 +1473,129 @@ void displayRenderOsScreen(uint8_t app, bool launcher, uint8_t selected) {
   flushDisplay();
 }
 
+namespace {
+constexpr uint16_t rgb565(uint8_t r,uint8_t g,uint8_t b) {
+  return uint16_t(((r&0xf8u)<<8)|((g&0xfcu)<<3)|(b>>3));
+}
+constexpr uint16_t kClosedGreen=rgb565(36,168,74), kClosedGrid=rgb565(20,85,43);
+constexpr uint16_t kClosedInk=rgb565(9,41,21), kClosedAmber=rgb565(255,176,32);
+constexpr uint16_t kClosedRed=rgb565(190,35,27), kClosedLight=rgb565(255,236,163);
+
+void drawClosedStar(Arduino_GFX *d,int x,int y,int r) {
+  // Five-point star, ten alternating vertices, integer fixed-point geometry.
+  static const int8_t px[10]={0,26,95,42,59,0,-59,-42,-95,-26};
+  static const int8_t py[10]={-100,-36,-31,14,81,44,81,14,-31,-36};
+  for (int i=0;i<10;++i) {
+    const int j=(i+1)%10;
+    d->fillTriangle(x,y,x+px[i]*r/100,y+py[i]*r/100,
+                    x+px[j]*r/100,y+py[j]*r/100,kClosedRed);
+  }
+}
+
+void drawClosedRadar(Arduino_GFX *d,const RadarView &v) {
+  const auto game=beaconServiceSphereGame();
+  const auto link=beaconServiceSecureLinkStatus();
+  const auto ball=closedBallVisual(game.selected,link==SecureLinkStatus::Paired,
+                                   link==SecureLinkStatus::Lost,v.proximity);
+  const bool available=ball.state==ClosedBallState::Signal;
+  d->fillScreen(kClosedInk);
+  d->fillCircle(233,233,222,kClosedGreen);
+  d->drawCircle(233,233,221,kClosedGrid);
+  d->drawCircle(233,233,190,kClosedGrid);
+  // Clip rotated grid lines to the circular instrument face.
+  const auto rx=[](int x,int y){return int(lroundf(.5f*x-.8660254f*y));};
+  const auto ry=[](int x,int y){return int(lroundf(.8660254f*x+.5f*y));};
+  for (int i=-180;i<=180;i+=45) {
+    const int h=int(sqrtf(float(190*190-i*i)));
+    d->drawLine(233+rx(-h,i),233+ry(-h,i),233+rx(h,i),233+ry(h,i),kClosedGrid);
+    d->drawLine(233+rx(i,-h),233+ry(i,-h),233+rx(i,h),233+ry(i,h),kClosedGrid);
+  }
+  const float a=(millis()%RADAR_SCAN_PERIOD_MS)*(2.0f*PI/RADAR_SCAN_PERIOD_MS);
+  for (int i=0;i<6;++i) {
+    const float t=a-i*.035f;
+    d->drawLine(233,233,233+int(187*cosf(t)),233+int(187*sinf(t)),
+                i==0?kClosedInk:kClosedGrid);
+  }
+  if (ball.state==ClosedBallState::Signal || ball.state==ClosedBallState::Found) {
+    const int r=ball.radius;
+    d->fillCircle(233,233,r,kClosedInk);
+    d->fillCircle(233,233,r-2,kClosedAmber);
+    d->fillCircle(233-r/3,233-r/2,std::max(2,r/9),kClosedLight);
+    if (ball.state==ClosedBallState::Found) {
+      d->drawLine(218,234,229,245,kClosedInk);
+      d->drawLine(229,245,249,222,kClosedInk);
+      d->drawLine(218,235,229,246,kClosedInk);
+      d->drawLine(229,246,249,223,kClosedInk);
+    } else for (uint8_t i=0;i<game.selected;++i) {
+      const auto s=closedStar(game.selected,i,ball.radius);
+      if (s.r) drawClosedStar(d,233+s.x,233+s.y,s.r);
+    }
+  } else if (ball.state!=ClosedBallState::None) {
+    for (int i=0;i<8;++i) {
+      const float t=i*PI/4;
+      d->fillCircle(233+int(12*cosf(t)),233+int(12*sinf(t)),1,kClosedInk);
+    }
+  }
+  char text[48];
+  if (game.selected) snprintf(text,sizeof(text),"SFERA %u  -  %u/7",unsigned(game.selected),unsigned(game.foundCount));
+  else snprintf(text,sizeof(text),"TROVATE %u/7",unsigned(game.foundCount));
+  d->fillRoundRect(104,57,258,26,6,kClosedInk);
+  drawCenteredText(d,62,text,RADAR_COLOR_WHITE,2);
+  d->fillRoundRect(177,88,112,25,5,kClosedGreen);
+  drawCenteredText(d,91,"CHIUSO",kClosedInk,2);
+  for (uint8_t id=1;id<=SphereSearch::count;++id) {
+    const uint8_t bit=1u<<(id-1);
+    const bool found=game.found&bit, selected=game.selected==id;
+    const bool associated=game.associated&bit;
+    const int x=RADAR_SPHERE_X+(id-1)*RADAR_SPHERE_PITCH;
+    d->fillRoundRect(x,RADAR_SPHERE_Y,RADAR_SPHERE_WIDTH,RADAR_SPHERE_HEIGHT,5,
+                     selected?kClosedAmber:kClosedInk);
+    d->drawRoundRect(x,RADAR_SPHERE_Y,RADAR_SPHERE_WIDTH,RADAR_SPHERE_HEIGHT,5,
+                     selected?kClosedInk:associated?kClosedLight:kClosedGrid);
+    d->setTextSize(2); d->setTextColor(selected?kClosedInk:associated?RADAR_COLOR_WHITE:RADAR_COLOR_GRAY);
+    d->setCursor(x+14,RADAR_SPHERE_Y+6); d->print(unsigned(id));
+    if (found) {
+      d->drawLine(x+27,RADAR_SPHERE_Y+19,x+30,RADAR_SPHERE_Y+22,kClosedLight);
+      d->drawLine(x+30,RADAR_SPHERE_Y+22,x+36,RADAR_SPHERE_Y+14,kClosedLight);
+    }
+  }
+  const char *state="RICERCA";
+  switch (ball.state) {
+    case ClosedBallState::None: state=game.foundCount==7?"TUTTE TROVATE":"NESSUNA SFERA"; break;
+    case ClosedBallState::Lost: state="SEGNALE PERSO"; break;
+    case ClosedBallState::Found: state=game.foundCount==7?"TUTTE TROVATE":"TROVATA"; break;
+    case ClosedBallState::Searching: break;
+    case ClosedBallState::Signal:
+      switch(v.proximity.state) {
+        case ProximityState::Weak: state="DEBOLE"; break;
+        case ProximityState::Approaching: state="TI AVVICINI"; break;
+        case ProximityState::MovingAway: state="TI ALLONTANI"; break;
+        case ProximityState::Near: state="VICINO"; break;
+        default: state="STABILE"; break;
+      }
+      break;
+  }
+  d->fillRoundRect(113,304,240,24,5,kClosedInk);
+  drawCenteredText(d,308,state,ball.state==ClosedBallState::Lost?kClosedLight:RADAR_COLOR_WHITE,2);
+  d->fillRoundRect(125,330,216,23,5,kClosedGreen);
+  if (available) {
+    snprintf(text,sizeof(text),"SEGNALE %u%%",unsigned(v.proximity.level)*100u/kProximityMaxLevel);
+    drawCenteredText(d,334,text,kClosedInk,2);
+    d->fillRoundRect(RADAR_FOUND_X,RADAR_FOUND_Y,RADAR_FOUND_WIDTH,RADAR_FOUND_HEIGHT,8,kClosedInk);
+    drawCenteredText(d,366,"TROVATA? CONFERMA",RADAR_COLOR_WHITE,2);
+  } else if (game.selected && ball.state!=ClosedBallState::Found)
+    drawCenteredText(d,334,link==SecureLinkStatus::Paired?"ATTESA RSSI":"NON CONNESSO",kClosedInk,2);
+  if (game.foundCount) {
+    d->fillRoundRect(RADAR_GAME_X,RADAR_GAME_Y,RADAR_GAME_WIDTH,RADAR_GAME_HEIGHT,6,kClosedInk);
+    drawCenteredText(d,402,"NUOVA PARTITA",RADAR_COLOR_WHITE,2);
+  }
+  d->fillRoundRect(207,432,52,5,2,kClosedInk);
+}
+}
+
 void displayRenderRadarApp(const RadarView &v) {
   if (!s_display_initialized) return;
+  if (!v.demo && !v.open) { drawClosedRadar(getDrawTarget(),v); flushDisplay(); return; }
   Arduino_GFX *d = getDrawTarget(); d->fillScreen(0x04A0);
   // Rotation is clockwise in screen coordinates (Y increases downward).
   const auto rx = [](int x, int y) { return (int16_t)lroundf(0.5f*x - 0.8660254f*y); };
