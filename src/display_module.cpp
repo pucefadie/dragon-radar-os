@@ -1512,12 +1512,12 @@ void drawClosedRadar(Arduino_GFX *d,const RadarView &v) {
   d->fillScreen(kClosedInk);
   d->fillCircle(233,233,222,kClosedGreen);
   d->drawCircle(233,233,221,kClosedGrid);
-  d->drawCircle(233,233,190,kClosedGrid);
+  d->drawCircle(233,233,kClosedGridRadius,kClosedGrid);
   // Clip rotated grid lines to the circular instrument face.
   const auto rx=[](int x,int y){return int(lroundf(.5f*x-.8660254f*y));};
   const auto ry=[](int x,int y){return int(lroundf(.8660254f*x+.5f*y));};
   for (int i=-180;i<=180;i+=45) {
-    const int h=int(sqrtf(float(190*190-i*i)));
+    const int h=int(sqrtf(float(kClosedGridRadius*kClosedGridRadius-i*i)));
     d->drawLine(233+rx(-h,i),233+ry(-h,i),233+rx(h,i),233+ry(h,i),kClosedGrid);
     d->drawLine(233+rx(i,-h),233+ry(i,-h),233+rx(i,h),233+ry(i,h),kClosedGrid);
   }

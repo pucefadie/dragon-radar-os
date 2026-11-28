@@ -63,3 +63,7 @@ Non è dimostrato che questo difetto causasse i transitori Lost osservati fisica
 ## Sesto checkpoint — leggibilità launcher
 - Implementato size 2 nelle tile, etichette su due righe, contorno selezionato, istruzioni leggibili; coordinate e hit test condivisi via launcherTileAt/X/Y e costanti in app_manager.h. Tap nelle separazioni non apre app, pulsanti e gesture preservati.
 - Suite host 16 gruppi PASS, exit 0. La build v4 in corso è del renderer Chiuso prima di questo checkpoint, non contiene il nuovo launcher. Per candidato cumulativo usare RADAR_OTA_VERSION=5 e output nuovo (build/review-20261128-graphics-v5), non installare senza autorizzazione. Debug/Aperto non ridisegnati; banco NOT RUN.
+
+## Settimo checkpoint — scala sfera corretta
+- Base 83b86b4; utente richiede diametro della sfera al 100% pari al reticolo esterno (380 px). Implementata scala arrotondata r=12..190, costante condivisa con renderer; stelle entro banda centrale non coperta dal HUD. Test geometrico PASS, incluso tutti i raggi interi da 24 a 190. Demo/Aperto e radio invariati.
+- Build v4/v5 PASS, ma entrambe antecedenti alla nuova scala. Per v6 usare RADAR_OTA_VERSION=6, output build/review-20261128-graphics-v6; verificare esito e binario prima di qualsiasi collaudo autorizzato. Nessuna installazione.
