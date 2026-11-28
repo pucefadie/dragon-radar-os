@@ -61,3 +61,20 @@ APERTO mantiene triangolo rosso, blip geografici, zoom, salvataggio GPS e fallba
 
 ## 7. Decisioni da confermare sul display
 Colori, raggio massimo 68, soglia per stelle, testo breve e assenza di pulsazione sono scelte grafiche proposte, non già approvate o validate fisicamente. La fedeltà è al linguaggio visivo del quadrante, non a una specifica tavola o fotogramma. Non sono stati prodotti mockup né modificato il renderer in questo checkpoint.
+
+
+## 8. Feedback aptico direzionale in Reale Chiuso — richiesta utente
+Stato: SPEC, non implementato. Vibra il radar S3 in mano all'utente, non il motore della sfera remota. Il feedback remoto al ritrovamento rimane invariato.
+
+- Usare lo stesso livello RSSI filtrato e con isteresi della grafica (1..15). Percentuale relativa p=100*level/15; fascia intera b=(10*level)/15 con divisione intera, 0..10. Il livello 0 significa assenza, non distanza massima. La percentuale non è una misura in metri.
+- Attraversamento di una o più soglie del 10% verso l'alto: un impulso di 100 ms. Verso il basso: due impulsi di 100 ms separati da 120 ms OFF. Segnale stabile: silenzio. Un salto multiplo produce un solo pattern; nessuna coda di impulsi.
+- Al primo campione valido, ritorno da Lost, cambio ID/sessione, nuova partita, ingresso in Chiuso o riattivazione vibrazione, acquisire la fascia di riferimento senza vibrare. Non confrontare misure appartenenti a peer diversi. Solo nuovi campioni autentici, non i frame UI ripetuti (timestamp ricezione ricavabile da now-age_ms con snapshot coerente).
+- Requisiti: selected 1..7, Paired, fresh, non Found, impostazione vibration attiva, Radar Chiuso in primo piano e nessun OTA/standby. Invalidare il riferimento quando uno dei gate decade; anche quando il launcher copre il Radar o l'app cambia. Nessun fallback ai beacon DEV o a RSSI grezzo.
+- Anti-rimbalzo: sfruttare l'isteresi RSSI esistente e introdurre intervallo minimo tra nuovi pattern di 1500 ms (parametro proposto da calibrare); se il motore ha un pattern in corso, non interromperlo, nemmeno durante la pausa OFF. Aggiornare comunque la fascia osservata e scartare gli eventi soppressi, evitando vibrazioni ritardate. Nessun delay bloccante.
+- Opzionale, da approvare separatamente: tre impulsi una sola volta nella transizione da segnale valido a Lost; un impulso più lungo (250 ms) alla conferma manuale di ritrovamento, senza interferire con il feedback remoto esistente. Non necessari per la prima implementazione dei due segnali direzionali.
+
+### Integrazione e collaudo
+- appRadarHaptic() in src/app_radar.cpp oggi esce per !v.demo: mantenere Demo invariata e aggiungere percorso Chiuso distinto. src/main.cpp chiama il feedback nel render (~60 ms), solo in app Radar e senza OTA; aggiungere reset esplicito quando non viene chiamato e sui cambi di modalità/peer/sessione. Aperto invariato.
+- Estendere include/radar_feedback.h con macchina a stati pura host-testable; input validità, livello, identità/sessione, timestamp e abilitazione; output None/Approach/Retreat. Non modificare la logica di ricerca o di conferma.
+- Driver locale: esistono motorTriggerShortPulse() (100 ms), motorTriggerMediumPulse() (250 ms) e motorTriggerTriplePulse() (3x100/120 ms); non esiste ancora un doppio pattern dedicato. Aggiungere DOUBLE al motore locale con tre step ON/OFF/ON in peripherals_module.cpp e relativo enum/helper. Conservare limiti hardware, watchdog, diagnostica e gestione non bloccante. Verificare pattern_running, non soltanto motorIsActive(), per non interrompere le pause OFF. Nessun comando DRA1 alle sfere per questo feedback.
+- Test host: soglie 10%, salti multipli, ripetizioni, oscillazioni, cooldown e rollover, Lost e reacquisizione, ID/sessione diversa, standby/OTA/launcher, vibrazione disattivata, Found. Verificare che un motore occupato non generi arretrati. Aggiornare suite host e build S3. Banco solo dopo autorizzazione: percepibilità dei pattern e misure elettriche; nessuna variazione al firmware C6.
